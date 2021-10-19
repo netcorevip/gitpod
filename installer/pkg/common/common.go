@@ -454,6 +454,10 @@ var (
 		APIVersion: "policy/v1beta1",
 		Kind:       "PodSecurityPolicy",
 	}
+	TypeMetaResourceQuota = metav1.TypeMeta{
+		APIVersion: "v1",
+		Kind:       "ResourceQuota",
+	}
 )
 
 type TLS struct {

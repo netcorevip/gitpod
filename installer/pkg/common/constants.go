@@ -16,4 +16,5 @@ const (
 	MonitoringChart           = "monitoring"
 	ProxyComponent            = "proxy"
 	ServerComponent           = "server"
+	SystemNodeCritical        = "system-node-critical"
 )
