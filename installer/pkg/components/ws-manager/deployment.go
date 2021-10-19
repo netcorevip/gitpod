@@ -7,7 +7,6 @@ package wsmanager
 import (
 	"github.com/gitpod-io/gitpod/installer/pkg/common"
 	wsdaemon "github.com/gitpod-io/gitpod/installer/pkg/components/ws-daemon"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -87,39 +86,34 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 								ReadOnly:  true,
 							}},
 						}},
-						Volumes: []corev1.Volume{
-							{
-								Name: VolumeConfig,
-								VolumeSource: corev1.VolumeSource{
-									ConfigMap: &corev1.ConfigMapVolumeSource{
-										LocalObjectReference: corev1.LocalObjectReference{Name: Component},
-									},
+						Volumes: []corev1.Volume{{
+							Name: VolumeConfig,
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{Name: Component},
 								},
 							},
-							{
-								Name: wsdaemon.VolumeTLSCerts,
-								VolumeSource: corev1.VolumeSource{
-									Secret: &corev1.SecretVolumeSource{
-										SecretName: wsdaemon.TLSSecretName,
-									},
+						}, {
+							Name: VolumeWorkspaceTemplate,
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{Name: WorkspaceTemplateConfigMap}},
+							},
+						}, {
+							Name: wsdaemon.VolumeTLSCerts,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: wsdaemon.TLSSecretName,
 								},
 							},
-							{
-								Name: VolumeTLSCerts,
-								VolumeSource: corev1.VolumeSource{
-									Secret: &corev1.SecretVolumeSource{
-										SecretName: TLSSecretNameSecret,
-									},
+						}, {
+							Name: VolumeTLSCerts,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: TLSSecretNameSecret,
 								},
 							},
-							{
-								Name: VolumeWorkspaceTemplate,
-								VolumeSource: corev1.VolumeSource{
-									ConfigMap: &corev1.ConfigMapVolumeSource{
-										LocalObjectReference: corev1.LocalObjectReference{Name: WorkspaceTemplateConfigMap}},
-								},
-							},
-						},
+						}},
 					},
 				},
 			},

@@ -39,7 +39,7 @@ func tlssecret(ctx *common.RenderContext) ([]runtime.Object, error) {
 		&certmanagerv1.Certificate{
 			TypeMeta: common.TypeMetaCertificate,
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      Component,
+				Name:      TLSSecretNameSecret,
 				Namespace: ctx.Namespace,
 				Labels:    common.DefaultLabels(Component),
 			},
