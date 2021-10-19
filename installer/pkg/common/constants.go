@@ -8,6 +8,7 @@ package common
 
 const (
 	BlobServeServicePort      = 4000
+	CertManagerCAIssuer       = "ca-issuer"
 	DockerRegistryName        = "registry"
 	InClusterDbSecret         = "mysql"
 	InClusterMessageQueueName = "rabbitmq"
