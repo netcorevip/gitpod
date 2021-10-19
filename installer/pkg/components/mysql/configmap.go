@@ -12,6 +12,10 @@ import (
 )
 
 func configmap(ctx *common.RenderContext) ([]runtime.Object, error) {
+	if !enabled(ctx) {
+		return nil, nil
+	}
+
 	// todo(sje): work out how best to load the db init scripts - I'm thinking generate at buildtime to a single .sql file then embed it here
 	var initScripts []byte
 
