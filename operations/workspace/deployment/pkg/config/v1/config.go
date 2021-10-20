@@ -13,9 +13,11 @@ import (
 // Here is a sample representation of yaml configuration
 //
 // version: v1
-// environmentFile: staging.yaml
-// #TODO(prs): gcpSecretPath: /var/gcp/gitpod-sa.json
-
+// projectId: gitpod-191109
+// environment: production
+// gcpSACredFile: /gcp-sa/credentials.json
+// network: gitpod-prod
+// dnsZone: gitpod-io
 // metaClusters:
 // - name: prod-meta-eu00
 //   region: europe-west1
@@ -32,9 +34,10 @@ import (
 //   governedBy: prod-meta-us01
 //   create: true
 //   type: gke
+
 type Config struct {
-	Version         string `yaml:"version"`
-	EnvironmentFile string `yaml:"environmentFile"`
+	Version string `yaml:"version"`
+	common.ProjectContext
 	// MetaClusters is optional as we may not want to register the cluster
 	MetaClusters      []*common.MetaCluster     `yaml:"metaClusters"`
 	WorkspaceClusters []common.WorkspaceCluster `yaml:"workspaceClusters"`

@@ -4,21 +4,8 @@
 
 package common
 
-import (
-	"k8s.io/client-go/kubernetes"
-)
-
 // ClusterType is the type of cluster to be created e.g. k3s, gke etc
 type ClusterType string
-
-// Environment is the cluster environment
-// TODO(prs): Update this struct to include right fields which can map to a file
-type Environment struct {
-	GetClusterName()
-}
-
-// environment: production
-// environmentShort: prod
 
 const (
 	// ClusterTypeGKE represents a cluster of type Google Kubernetes Engine (GKE)
@@ -42,10 +29,4 @@ type WorkspaceCluster struct {
 	GovernedBy  string      `yaml:"governedBy"`
 	ClusterType ClusterType `yaml:"clusterType"`
 	Create      bool        `yaml:"create"`
-}
-
-// ClusterContext contains the context to access the cluster
-type ClusterContext struct {
-	KubeconfigPath string
-	Client         *kubernetes.Clientset
 }

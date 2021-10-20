@@ -1,7 +1,9 @@
 version: v1
-environmentFile: staging.yaml
-#TODO(prs): gcpSecretPath: /var/gcp/gitpod-sa.json
-
+project: gitpod-191109
+environment: production
+gcpSACredFile: /gcp-sa/credentials.json
+network: gitpod-prod
+dnsZone: gitpod-io
 metaClusters:
 - name: prod-meta-eu00
   region: europe-west1

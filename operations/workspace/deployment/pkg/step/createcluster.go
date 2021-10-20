@@ -7,48 +7,58 @@ package step
 import (
 	"fmt"
 
-	prerun "github.com/gitpod-io/gitpod/ws-deployment/pkg/check/prerun"
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/common"
-	"github.com/gitpod-io/gitpod/ws-deployment/pkg/infra"
-	"golang.org/x/xerrors"
+	"github.com/gitpod-io/gitpod/ws-deployment/pkg/runner"
 )
 
-// CreateClusterStep is the step which creates a kubernetes cluster
-type CreateClusterStep struct {
-	ProjectContext *common.ProjectContext
-	ClusterContext *common.ClusterContext
-	Cluster        *common.WorkspaceCluster
-	PreRuns        *prerun.CreateClusterPreruns
+const (
+	// DefaultTFModuleGeneratorScriptPath is the path to script that must be invoked
+	// from its parent dir in order to generate terraform modules
+	DefaultTFModuleGeneratorScriptPath = "dev/build-ws-cluster/build-ws-cluster.sh"
+
+	// DefaultGeneratedTFModulePathTemplate represents the path template where the default module
+	// would be generated
+	//
+	// deploy/{environment}/ws-{name}/terraform
+	DefaultGeneratedTFModulePathTemplate = "deploy/%s/ws-%s/terraform"
+)
+
+func CreateCluster(context *common.ProjectContext, cluster common.WorkspaceCluster) error {
+	err := doesClusterExist(context, cluster)
+	if err != nil {
+		return err
+	}
+	err := generateTerraformModules(context, cluster)
+	if err != nil {
+		return err
+	}
+	err = applyTerraformModules(context, cluster)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (cs *CreateClusterStep) Run() error {
-	tfModule := infra.TerraformModule{
-		ClusterType:        cs.Cluster.ClusterType,
-		ClusterPrefix:      cs.Cluster.Name, // the name of the cluster translates to cluster prefix
-		ClusterEnvironment: cs.ProjectContext.Environment,
-		Region:             cs.Cluster.Region,
-		// The directory context must be changed before executing the below path
-		// i.e. the current dir should be the ops repository home so that `deploy/xxx`
-		// exists
-		ScriptPath: infra.DefaultTFModuleGeneratorScriptPath,
-		ScriptArgs: generateDefaultScriptPathArgsString(cs),
-	}
-
-	err := tfModule.CreateTerraformModule()
-	if err != nil {
-		return xerrors.Errorf("Error creating terraform modules: %s", err)
-	}
-
-	err = tfModule.ApplyTerraformModule()
-	if err != nil {
-		return xerrors.Errorf("Error applying terraform modules: %s", err)
-	}
-
-	panic("I am not implemented yet!")
+func doesClusterExist(context *common.ProjectContext, cluster common.WorkspaceCluster) (bool, error) {
+	runner.ShellRun()
 }
 
-func generateDefaultScriptPathArgsString(cs *CreateClusterStep) string {
-	// example `-e production -l europe-west1 -p us89 -t k3s`
-	argsString := fmt.Sprintf("-e %s -l %s -p %s -t %s", "staging", cs.Cluster.Region, cs.Cluster.Name, cs.Cluster.ClusterType)
+func generateTerraformModules(context *common.ProjectContext, cluster common.WorkspaceCluster) error {
+	err := runner.ShellRun(DefaultTFModuleGeneratorScriptPath, []string{generateDefaultScriptArgsString(context, cluster)})
+	return err
+}
+
+func generateDefaultScriptArgsString(context *common.ProjectContext, cluster common.WorkspaceCluster) string {
+	// example `-e staging -l europe-west1 -n us89 -t k3s -g gitpod-staging -w gitpod-staging -d gitpod-staging-com`
+	argsString := fmt.Sprintf("-e %s -l %s -n %s -t %s -g %s -w %s -d %s",
+		context.Environment, cluster.Region, cluster.Name, cluster.ClusterType, context.ProjectId, context.Network, context.DNSZone,
+	)
 	return argsString
+}
+
+func applyTerraformModules(context *common.ProjectContext, cluster common.WorkspaceCluster) error {
+	tfModulesDir := fmt.Sprintf(DefaultGeneratedTFModulePathTemplate, context.Environment, cluster.Name)
+	commandToRun := fmt.Sprintf("cd %s && terraform init && terraform apply -auto-approve", tfModulesDir)
+	err := runner.ShellRun("/bin/sh", []string{"-c", commandToRun})
+	return err
 }
