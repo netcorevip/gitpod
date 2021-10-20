@@ -10,6 +10,8 @@ import { PageWithSubMenu } from "../components/PageWithSubMenu";
 import SelectableCard from "../components/SelectableCard";
 import Tooltip from "../components/Tooltip";
 import vscode from '../images/vscode.svg';
+import ideaLogo from '../images/intellijIdeaLogo.svg';
+import golandLogo from '../images/golandLogo.svg';
 import { getGitpodService } from "../service/service";
 import { ThemeContext } from "../theme-context";
 import { UserContext } from "../user-context";
@@ -99,12 +101,12 @@ export default function Preferences() {
                 <div className="mt-4 space-x-4 flex">
                     <SelectableCard className="w-36 h-40" title="IntelliJ IDEA" selected={defaultDesktopIde === 'intellij'} onClick={() => actuallySetDefaultDesktopIde('intellij')}>
                         <div className="flex justify-center mt-3">
-                            <img className="w-16 filter-grayscale self-center" src={vscode} />
+                        <img className="w-16 filter-grayscale self-center" src={ideaLogo} />
                         </div>
                     </SelectableCard>
                     <SelectableCard className="w-36 h-40" title="GoLand" selected={defaultDesktopIde === 'goland'} onClick={() => actuallySetDefaultDesktopIde('goland')}>
                         <div className="flex justify-center mt-3">
-                            <img className="w-16 filter-grayscale self-center" src={vscode} />
+                        <img className="w-16 filter-grayscale self-center" src={golandLogo} />
                         </div>
                     </SelectableCard>
                 </div>
