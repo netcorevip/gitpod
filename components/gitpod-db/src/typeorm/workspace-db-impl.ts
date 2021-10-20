@@ -554,6 +554,16 @@ export abstract class AbstractTypeORMWorkspaceDBImpl implements WorkspaceDB {
         return await snapshots.save(dbSnapshot);
     }
 
+    public async deleteSnapshot(snapshotId: string): Promise<void> {
+        const snapshots = await this.getSnapshotRepo();
+        await snapshots.deleteById(snapshotId);
+    }
+
+    public async updateSnapshot(snapshot: DeepPartial<Snapshot> & Pick<Snapshot, 'id'>): Promise<void> {
+        const snapshots = await this.getSnapshotRepo();
+        await snapshots.updateById(snapshot.id, snapshot);
+    }
+
     public async findSnapshotsByWorkspaceId(workspaceId: string): Promise<Snapshot[]> {
         const snapshots = await this.getSnapshotRepo();
         return snapshots.find({where: {originalWorkspaceId: workspaceId}});

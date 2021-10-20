@@ -378,10 +378,15 @@ export interface PendingGithubEvent {
 export interface Snapshot {
     id: string;
     creationTime: string;
+    availableTime?: string;
     originalWorkspaceId: string;
     bucketId: string;
     layoutData?: string;
+    state: SnapshotState;
+    message?: string;
 }
+
+export type SnapshotState = 'pending' | 'available' | 'error';
 
 export interface LayoutData {
     workspaceId: string;
