@@ -101,17 +101,21 @@ const toStop = new DisposableCollection();
     window.addEventListener('message', hideDesktopIdeEventListener, false);
     toStop.push({ dispose: () => window.removeEventListener('message', hideDesktopIdeEventListener) });
 
+    let isDesktopIde: undefined | boolean = undefined;
+    let ideStatus: undefined | { desktop: { link: string, label: string } } = undefined;
+
     //#region current-frame
     let current: HTMLElement = loading.frame;
     let stopped = false;
-    const nextFrame = async () => {
+    const nextFrame = () => {
         const instance = gitpodServiceClient.info.latestInstance;
         if (instance) {
             if (instance.status.phase === 'running') {
                 if (!hideDesktopIde) {
-                    const ideStatus = await supervisorServiceClient.ideReady;
-                    const isDesktopIde = ideStatus && ideStatus.desktop && ideStatus.desktop.link;
-                    if (isDesktopIde) {
+                    if (isDesktopIde == undefined) {
+                        return loading.frame;
+                    }
+                    if (isDesktopIde && !!ideStatus) {
                         loading.setState({
                             desktopIdeLink: ideStatus.desktop.link,
                             desktopIdeLabel: ideStatus.desktop.label || "Open Desktop IDE"
@@ -140,8 +144,8 @@ const toStop = new DisposableCollection();
         }
         return loading.frame;
     }
-    const updateCurrentFrame = async () => {
-        const newCurrent = await nextFrame();
+    const updateCurrentFrame = () => {
+        const newCurrent = nextFrame();
         if (current === newCurrent) {
             return;
         }
@@ -184,7 +188,7 @@ const toStop = new DisposableCollection();
         trackStatusRenderedEvent(`ide-${ideService.state}`, error);
     }
 
-    await updateCurrentFrame();
+    updateCurrentFrame();
     updateLoadingState();
     trackIDEStatusRenderedEvent();
     gitpodServiceClient.onDidChangeInfo(() => updateCurrentFrame());
@@ -193,6 +197,11 @@ const toStop = new DisposableCollection();
         updateCurrentFrame();
         trackIDEStatusRenderedEvent();
     });
+    supervisorServiceClient.ideReady.then(newIdeStatus => {
+        ideStatus = newIdeStatus;
+        isDesktopIde = !!ideStatus && !!ideStatus.desktop && !!ideStatus.desktop.link;
+        updateCurrentFrame();
+    }).catch(error => console.error(`Unexpected error from supervisorServiceClient.ideReady: ${error}`));
     window.addEventListener('unload', () => trackStatusRenderedEvent('window-unload'), { capture: true });
     //#endregion
 
