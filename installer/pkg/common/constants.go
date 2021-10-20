@@ -19,6 +19,10 @@ const (
 	RegistryFacadeServicePort = 3000
 	ServerComponent           = "server"
 	SystemNodeCritical        = "system-node-critical"
+	WSManagerComponent        = "ws-manager"
+	WSManagerBridgeComponent  = "ws-manager-bridge"
+	WSProxyComponent          = "ws-proxy"
+	WSSchedulerComponent      = "ws-scheduler"
 )
 
 const (
