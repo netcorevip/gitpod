@@ -92,18 +92,6 @@ func GlobalObjects(ctx *RenderContext) ([]runtime.Object, error) {
 				Verbs:     []string{"create"},
 			}},
 		},
-		&rbacv1.ClusterRole{
-			TypeMeta: TypeMetaClusterRole,
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-ns-psp:unprivileged", ctx.Namespace),
-			},
-			Rules: []rbacv1.PolicyRule{{
-				APIGroups:     []string{"policy"},
-				Resources:     []string{"podsecuritypolicies"},
-				Verbs:         []string{"use"},
-				ResourceNames: []string{fmt.Sprintf("%s-ns-unprivileged", ctx.Namespace)},
-			}},
-		},
 		&corev1.ResourceQuota{
 			TypeMeta: TypeMetaResourceQuota,
 			ObjectMeta: metav1.ObjectMeta{
