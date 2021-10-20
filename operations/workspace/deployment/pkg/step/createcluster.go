@@ -49,6 +49,6 @@ func (cs *CreateClusterStep) Run() error {
 
 func generateDefaultScriptPathArgsString(cs *CreateClusterStep) string {
 	// example `-e production -l europe-west1 -p us89 -t k3s`
-	argsString := fmt.Sprintf("-e %s -l %s -p %s -t %s", cs.ProjectContext.Environment, cs.Cluster.Region, cs.Cluster.Name, cs.Cluster.ClusterType)
+	argsString := fmt.Sprintf("-e %s -l %s -p %s -t %s", "staging", cs.Cluster.Region, cs.Cluster.Name, cs.Cluster.ClusterType)
 	return argsString
 }
