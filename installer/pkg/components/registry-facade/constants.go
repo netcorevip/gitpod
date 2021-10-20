@@ -4,9 +4,13 @@
 
 package registryfacade
 
+import "github.com/gitpod-io/gitpod/installer/pkg/common"
+
 const (
-	Component         = "registry-facade"
+	Component         = common.RegistryFacadeComponent
 	ContainerPortName = "registry"
 	ContainerPort     = 32223
-	ServicePort       = 3000
+	ServicePort       = common.RegistryFacadeServicePort
+	DockerUpImage     = "docker-up"
+	SupervisorImage   = "supervisor"
 )

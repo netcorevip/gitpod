@@ -6,6 +6,7 @@ package common
 
 import (
 	"fmt"
+	storageconfig "github.com/gitpod-io/gitpod/content-service/api/config"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -110,6 +111,31 @@ func GlobalObjects(ctx *RenderContext) ([]runtime.Object, error) {
 					}},
 				},
 			},
+		},
+	}, nil
+}
+
+func StorageConfiguration(ctx *RenderContext) (*storageconfig.StorageConfig, error) {
+	accessKey, found := ctx.Values[ValueStorageAccessKey]
+	if !found {
+		return nil, fmt.Errorf("unknown value: %s", ValueStorageAccessKey)
+	}
+	secretKey, found := ctx.Values[ValueStorageSecretKey]
+	if !found {
+		return nil, fmt.Errorf("unknown value: %s", ValueStorageSecretKey)
+	}
+
+	// todo(sje): support non-Minio storage configuration
+	// todo(sje): this has been set up with only the default values - receive configuration
+	return &storageconfig.StorageConfig{
+		Kind:      "minio",
+		BlobQuota: 0,
+		MinIOConfig: storageconfig.MinIOConfig{
+			Endpoint:        fmt.Sprintf("minio.%s", ctx.Config.Domain),
+			AccessKeyID:     accessKey,
+			SecretAccessKey: secretKey,
+			Secure:          false,
+			Region:          "local",
 		},
 	}, nil
 }

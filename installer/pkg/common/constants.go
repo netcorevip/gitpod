@@ -15,6 +15,8 @@ const (
 	InClusterMessageQueueTLS  = "messagebus-certificates-secret-core"
 	MonitoringChart           = "monitoring"
 	ProxyComponent            = "proxy"
+	RegistryFacadeComponent   = "registry-facade"
+	RegistryFacadeServicePort = 3000
 	ServerComponent           = "server"
 	SystemNodeCritical        = "system-node-critical"
 )
