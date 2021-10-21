@@ -18,6 +18,6 @@ var Objects = common.CompositeRenderFunc(
 			ContainerPort: ContainerPort,
 			ServicePort:   ServicePort,
 		},
-	}, nil),
+	}, true),
 	common.DefaultServiceAccount(Component),
 )

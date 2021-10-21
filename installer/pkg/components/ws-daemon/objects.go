@@ -15,6 +15,6 @@ var Objects = common.CompositeRenderFunc(
 	daemonset,
 	networkpolicy,
 	rolebinding,
-	common.GenerateService(Component, nil, nil),
+	common.GenerateService(Component, nil, false),
 	tlssecret,
 )
