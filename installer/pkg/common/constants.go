@@ -18,3 +18,8 @@ const (
 	ServerComponent           = "server"
 	SystemNodeCritical        = "system-node-critical"
 )
+
+const (
+	ValueStorageAccessKey = "storageAccessKey"
+	ValueStorageSecretKey = "storageSecretKey"
+)

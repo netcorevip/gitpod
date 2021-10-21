@@ -58,11 +58,7 @@ A config file is required which can be generated with the init command.`,
 			}
 		}
 
-		ctx := &common.RenderContext{
-			Config:          *cfg,
-			VersionManifest: versionMF,
-			Namespace:       renderOpts.Namespace,
-		}
+		ctx, err := common.NewRenderContext(*cfg, versionMF, renderOpts.Namespace)
 
 		var renderable common.RenderFunc
 		var helmCharts common.HelmFunc

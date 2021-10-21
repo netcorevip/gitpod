@@ -6,7 +6,6 @@ package minio
 
 import (
 	"fmt"
-
 	"github.com/gitpod-io/gitpod/installer/pkg/common"
 	"github.com/gitpod-io/gitpod/installer/pkg/helm"
 	"github.com/gitpod-io/gitpod/installer/third_party/charts"
@@ -16,13 +15,13 @@ import (
 
 var Helm = common.CompositeHelmFunc(
 	helm.ImportTemplate(charts.Minio(), helm.TemplateConfig{}, func(cfg *common.RenderContext) (*common.HelmConfig, error) {
-		accessKey, err := common.RandomString(20)
-		if err != nil {
-			return nil, err
+		accessKey, found := cfg.Values[common.ValueStorageAccessKey]
+		if !found {
+			return nil, fmt.Errorf("unknown value: %s", common.ValueStorageAccessKey)
 		}
-		secretKey, err := common.RandomString(20)
-		if err != nil {
-			return nil, err
+		secretKey, found := cfg.Values[common.ValueStorageSecretKey]
+		if !found {
+			return nil, fmt.Errorf("unknown value: %s", common.ValueStorageSecretKey)
 		}
 
 		return &common.HelmConfig{
