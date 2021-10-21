@@ -366,7 +366,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
         this.requireEELicense(Feature.FeatureSnapshot);
 
         const user = this.checkAndBlockUser("takeSnapshot");
-        const { workspaceId, layoutData } = options;
+        const { workspaceId } = options;
 
         const span = opentracing.globalTracer().startSpan("takeSnapshot");
         span.setTag("workspaceId", workspaceId);
@@ -388,17 +388,8 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
             // this triggers the snapshots, but returns early! cmp. waitForSnapshot to wait for it's completion
             const resp = await client.takeSnapshot({ span }, request);
 
-            const id = uuidv4()
-            await this.workspaceDb.trace({ span }).storeSnapshot({
-                id,
-                creationTime: new Date().toISOString(),
-                state: 'available',
-                bucketId: resp.getUrl(),
-                originalWorkspaceId: workspaceId,
-                layoutData,
-            });
-
-            return id;
+            const snapshot = await this.snapshotService.createSnapshot(options, resp.getUrl());
+            return snapshot.id;
         } catch (err) {
             TraceContext.logError({ span }, err);
             throw err;
@@ -438,7 +429,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
             const snapshotWorkspace = await this.guardSnaphotAccess(span, user.id, snapshot.originalWorkspaceId);
 
             try {
-                await this.snapshotService.driveSnapshot(snapshotWorkspace.ownerId, snapshot);
+                await this.snapshotService.waitForSnapshot({ workspaceOwner: snapshotWorkspace.ownerId, snapshot });
             } catch (err) {
                 // wrap in SNAPSHOT_ERROR to signal this call should not be retried.
                 throw new ResponseError(ErrorCodes.SNAPSHOT_ERROR, err.toString());
