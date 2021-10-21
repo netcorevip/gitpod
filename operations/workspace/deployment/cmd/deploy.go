@@ -19,7 +19,9 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/gitpod-io/gitpod/common-go/log"
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/orchestrate"
+	"github.com/gitpod-io/gitpod/ws-deployment/pkg/runner"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +34,12 @@ var deployCmd = &cobra.Command{
 		randomId := fmt.Sprintf("%d", rand.Intn(200)+100)
 		cfg.InitializeWorkspaceClusterNames(randomId) // TODO(prs):revisit and update this
 		fmt.Printf("%+v", cfg)
+		// TODO(prs): Activate the service account
+		// `gcloud auth activate-service-account --key-file ${GCLOUD_SERVICE_ACCOUNT_PATH_STAGING_DEPLOYER}`
+		_, stdErr, err := runner.ShellRun("gcloud", []string{"auth", "activate-service-account", "--key-file", cfg.Project.GCPSACredFile})
+		if err != nil {
+			log.Log.Infof("Error encountered while trying to activate service account: %s, %s. Assuming SA is already activated and configured.", err, stdErr)
+		}
 		orchestrate.Deploy(&cfg.Project, cfg.WorkspaceClusters)
 	},
 }
