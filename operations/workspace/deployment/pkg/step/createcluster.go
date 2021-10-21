@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gitpod-io/gitpod/common-go/log"
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/common"
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/runner"
 	"golang.org/x/xerrors"
@@ -38,6 +39,7 @@ func CreateCluster(context *common.ProjectContext, cluster *common.WorkspaceClus
 	// If there is neither an error nor the cluster exist then continue
 	err = generateTerraformModules(context, cluster)
 	if err != nil {
+		log.Log.Info("tried generating tf modules")
 		return err
 	}
 	// err = applyTerraformModules(context, cluster)
@@ -71,6 +73,8 @@ func generateDefaultScriptArgs(context *common.ProjectContext, cluster *common.W
 	argsString := fmt.Sprintf("-e %s -l %s -n %s -t %s -g %s -w %s -d %s",
 		context.Environment, cluster.Region, cluster.Name, cluster.ClusterType, context.Id, context.Network, context.DNSZone,
 	)
+	log.Log.Infof("args: %s", argsString)
+
 	return strings.Split(argsString, " ")
 }
 
