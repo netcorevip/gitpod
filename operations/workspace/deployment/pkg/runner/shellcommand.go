@@ -12,7 +12,7 @@ func ShellRun(shellCmd string, shellArgs []string) (string, string, error) {
 	cmd := exec.Command(shellCmd, shellArgs...)
 	var stdOut, stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
-	cmd.Stdout = &stdErr
+	cmd.Stderr = &stdErr
 	err := cmd.Run()
 	return stdOut.String(), stdErr.String(), err
 }
