@@ -49,7 +49,7 @@ func CreateCluster(context *common.ProjectContext, cluster *common.WorkspaceClus
 }
 
 func doesClusterExist(context *common.ProjectContext, cluster *common.WorkspaceCluster) (bool, error) {
-	stdOut, stdErr, err := runner.ShellRun("gcloud", []string{})
+	stdOut, stdErr, err := runner.ShellRun("/opt/google-cloud-sdk/bin/gcloud", []string{})
 	log.Log.Errorf("out, err, err: %s, %s, %s", stdOut, stdErr, err)
 	commandToRun := "gcloud"
 	// container clusters describe gp-stag-ws-us11-us-weswt1 --project gitpod-staging --region us-west1
