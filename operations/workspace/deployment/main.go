@@ -6,7 +6,6 @@ package main
 
 import "github.com/gitpod-io/gitpod/ws-deployment/cmd"
 
-
 func main() {
 	cmd.Execute()
 }

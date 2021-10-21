@@ -6,9 +6,11 @@ package step
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/common"
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/runner"
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -24,11 +26,17 @@ const (
 )
 
 func CreateCluster(context *common.ProjectContext, cluster common.WorkspaceCluster) error {
-	err := doesClusterExist(context, cluster)
+	exists, err := doesClusterExist(context, cluster)
+	// If we see an error finding out if cluster exists
 	if err != nil {
-		return err
+		return xerrors.Errorf("Issue finding out if cluster exists: %s", err)
 	}
-	err := generateTerraformModules(context, cluster)
+	// If the cluster already exists
+	if exists {
+		return xerrors.Errorf("Cluster '%s' already exists", cluster.Name)
+	}
+	// If there is neither an error nor the cluster exist then continue
+	err = generateTerraformModules(context, cluster)
 	if err != nil {
 		return err
 	}
@@ -40,20 +48,30 @@ func CreateCluster(context *common.ProjectContext, cluster common.WorkspaceClust
 }
 
 func doesClusterExist(context *common.ProjectContext, cluster common.WorkspaceCluster) (bool, error) {
-	runner.ShellRun()
+	commandToRun := "gcloud"
+	// container clusters describe gp-stag-ws-us11-us-weswt1 --project gitpod-staging --region us-west1
+	argsString := fmt.Sprintf("container clusters describe %s --project %s --region %s", cluster.Name, context.ProjectId, cluster.Region)
+	err := runner.ShellRun(commandToRun, strings.Split(argsString, " "))
+	if err == nil {
+		return true, nil
+	}
+	if strings.Contains(err.Error(), "No cluster named") {
+		return false, nil
+	}
+	return false, err
 }
 
 func generateTerraformModules(context *common.ProjectContext, cluster common.WorkspaceCluster) error {
-	err := runner.ShellRun(DefaultTFModuleGeneratorScriptPath, []string{generateDefaultScriptArgsString(context, cluster)})
+	err := runner.ShellRun(DefaultTFModuleGeneratorScriptPath, generateDefaultScriptArgs(context, cluster))
 	return err
 }
 
-func generateDefaultScriptArgsString(context *common.ProjectContext, cluster common.WorkspaceCluster) string {
+func generateDefaultScriptArgs(context *common.ProjectContext, cluster common.WorkspaceCluster) []string {
 	// example `-e staging -l europe-west1 -n us89 -t k3s -g gitpod-staging -w gitpod-staging -d gitpod-staging-com`
 	argsString := fmt.Sprintf("-e %s -l %s -n %s -t %s -g %s -w %s -d %s",
 		context.Environment, cluster.Region, cluster.Name, cluster.ClusterType, context.ProjectId, context.Network, context.DNSZone,
 	)
-	return argsString
+	return strings.Split(argsString, " ")
 }
 
 func applyTerraformModules(context *common.ProjectContext, cluster common.WorkspaceCluster) error {

@@ -5,6 +5,8 @@
 package v1
 
 import (
+	"strings"
+
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/common"
 )
 
@@ -47,6 +49,9 @@ type Config struct {
 // initializes workspace cluster names based on the config provided
 func (c *Config) InitializeWorkspaceClusterNames(id string) {
 	for _, wc := range c.WorkspaceClusters {
-		wc.Name = wc.Prefix + id
+		// Initialize workspace cluster names only if it is missing
+		if strings.TrimSpace(wc.Name) == "" {
+			wc.Name = wc.Prefix + id
+		}
 	}
 }

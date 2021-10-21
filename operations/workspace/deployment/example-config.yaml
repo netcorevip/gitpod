@@ -1,22 +1,22 @@
 version: v1
-project: gitpod-191109
-environment: production
-gcpSACredFile: /gcp-sa/credentials.json
-network: gitpod-prod
-dnsZone: gitpod-io
+project: gitpod-staging
+environment: staging
+gcpSACredFile: /mnt/secrets/gcp-sa
+network: gitpod-staging
+dnsZone: gitpod-staging-com
 metaClusters:
-- name: prod-meta-eu00
+- name: stag-meta-eu01
   region: europe-west1
-- name: prod-meta-us01
-  region: us-west-1
+- name: stag-meta-us01
+  region: us-west1
 workspaceClusters:
 - region: europe-west1
   prefix: eu
-  governedBy: prod-meta-eu01
+  governedBy: stag-meta-eu01
   create: true
   type: gke
-- region: us-east1
+- region: us-west1
   prefix: us
-  governedBy: prod-meta-us01
+  governedBy: stag-meta-us01
   create: true
   type: gke

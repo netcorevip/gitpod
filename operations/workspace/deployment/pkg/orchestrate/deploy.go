@@ -9,7 +9,6 @@ import (
 )
 
 func Deploy(context *common.ProjectContext, clusters []common.WorkspaceCluster) error {
-
 	var wg sync.WaitGroup
 	wg.Add(len(clusters))
 	defer wg.Wait()
