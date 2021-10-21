@@ -39,13 +39,12 @@ func CreateCluster(context *common.ProjectContext, cluster *common.WorkspaceClus
 	// If there is neither an error nor the cluster exist then continue
 	err = generateTerraformModules(context, cluster)
 	if err != nil {
-		log.Log.Info("tried generating tf modules")
 		return err
 	}
-	// err = applyTerraformModules(context, cluster)
-	// if err != nil {
-	// 	return err
-	// }
+	err = applyTerraformModules(context, cluster)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -65,7 +64,7 @@ func doesClusterExist(context *common.ProjectContext, cluster *common.WorkspaceC
 
 func generateTerraformModules(context *common.ProjectContext, cluster *common.WorkspaceCluster) error {
 	stdOut, stdErr, err := runner.ShellRun(DefaultTFModuleGeneratorScriptPath, generateDefaultScriptArgs(context, cluster))
-	log.Log.Infof("std outputs err: %s, out: %s", stdOut, stdErr)
+	log.Log.Errorf("Error generating Terraform modules: stdErr %s, stdOut: %s", stdErr, stdOut)
 	return err
 }
 
@@ -74,16 +73,12 @@ func generateDefaultScriptArgs(context *common.ProjectContext, cluster *common.W
 	argsString := fmt.Sprintf("-e %s -l %s -n %s -t %s -g %s -w %s -d %s",
 		context.Environment, cluster.Region, cluster.Name, cluster.ClusterType, context.Id, context.Network, context.DNSZone,
 	)
-	log.Log.Infof("args: %s", argsString)
-
 	return strings.Split(argsString, " ")
 }
 
 func applyTerraformModules(context *common.ProjectContext, cluster *common.WorkspaceCluster) error {
 	tfModulesDir := fmt.Sprintf(DefaultGeneratedTFModulePathTemplate, context.Environment, cluster.Name)
-	commandToRun := fmt.Sprintf("cd %s && terraform init && terraform apply -auto-approve", tfModulesDir)
-	log.Log.Infof("apply terraform command: %s", commandToRun)
-	stdOut, stdErr, err := runner.ShellRun("/bin/sh", []string{"-c", commandToRun})
-	log.Log.Infof("apply std outputs err: %s, out: %s", stdOut, stdErr)
+	commandToRun := fmt.Sprintf("cd %s && terraform init && terraform apply", tfModulesDir)
+	err := runner.ShellRunWithDefaultConfig("/bin/sh", []string{"-c", commandToRun})
 	return err
 }
