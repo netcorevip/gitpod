@@ -34,8 +34,8 @@ var deployCmd = &cobra.Command{
 		randomId := fmt.Sprintf("%d", rand.Intn(200)+100)
 		cfg.InitializeWorkspaceClusterNames(randomId) // TODO(prs):revisit and update this
 		fmt.Printf("%+v", cfg)
-		// TODO(prs): Activate the service account
-		// `gcloud auth activate-service-account --key-file ${GCLOUD_SERVICE_ACCOUNT_PATH_STAGING_DEPLOYER}`
+		// Activate google service account
+		// mapping command: `gcloud auth activate-service-account --key-file ${GCLOUD_SERVICE_ACCOUNT_CRENPATH}`
 		_, stdErr, err := runner.ShellRun("gcloud", []string{"auth", "activate-service-account", "--key-file", cfg.Project.GCPSACredFile})
 		if err != nil {
 			log.Log.Infof("Error encountered while trying to activate service account: %s, %s. Assuming SA is already activated and configured.", err, stdErr)
