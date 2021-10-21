@@ -52,14 +52,14 @@ func doesClusterExist(context *common.ProjectContext, cluster *common.WorkspaceC
 	commandToRun := "gcloud"
 	// container clusters describe gp-stag-ws-us11-us-weswt1 --project gitpod-staging --region us-west1
 	argsString := fmt.Sprintf("container clusters describe %s --project %s --region %s", cluster.Name, context.Id, cluster.Region)
-	_, stdErr, err := runner.ShellRun(commandToRun, strings.Split(argsString, " "))
+	stdOut, stdErr, err := runner.ShellRun(commandToRun, strings.Split(argsString, " "))
 	if err == nil {
 		return true, nil
 	}
 	if strings.Contains(stdErr, "No cluster named") {
 		return false, nil
 	}
-	log.Log.Errorf("Encountered an error while trying to describe cluster: %s", stdErr)
+	log.Log.Errorf("Encountered an error while trying to describe cluster: %s, %s", stdErr, stdOut)
 	return false, err
 }
 
