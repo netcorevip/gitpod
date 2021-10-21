@@ -14,9 +14,6 @@ func ShellRun(shellCmd string, shellArgs []string) (string, string, error) {
 	cmd.Stdout = &stdOut
 	cmd.Stdout = &stdErr
 	err := cmd.Run()
-	if err != nil {
-		return stdOut.String(), stdErr.String(), err
-	}
 	return stdOut.String(), stdErr.String(), err
 }
 
