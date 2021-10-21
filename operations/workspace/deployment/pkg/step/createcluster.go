@@ -59,6 +59,7 @@ func doesClusterExist(context *common.ProjectContext, cluster *common.WorkspaceC
 	if strings.Contains(stdErr, "No cluster named") {
 		return false, nil
 	}
+	log.Log.Errorf("Encountered an error while trying to describe cluster: %s", stdErr)
 	return false, err
 }
 

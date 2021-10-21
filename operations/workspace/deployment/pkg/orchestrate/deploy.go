@@ -11,7 +11,6 @@ import (
 func Deploy(context *common.ProjectContext, clusters []*common.WorkspaceCluster) error {
 	var wg sync.WaitGroup
 	wg.Add(len(clusters))
-	defer wg.Wait()
 
 	for _, cluster := range clusters {
 		go func(context *common.ProjectContext, cluster *common.WorkspaceCluster) {
@@ -22,6 +21,6 @@ func Deploy(context *common.ProjectContext, clusters []*common.WorkspaceCluster)
 			}
 		}(context, cluster)
 	}
-
+	wg.Wait()
 	return nil
 }
