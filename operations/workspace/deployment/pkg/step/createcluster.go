@@ -64,7 +64,8 @@ func doesClusterExist(context *common.ProjectContext, cluster *common.WorkspaceC
 }
 
 func generateTerraformModules(context *common.ProjectContext, cluster *common.WorkspaceCluster) error {
-	_, _, err := runner.ShellRun(DefaultTFModuleGeneratorScriptPath, generateDefaultScriptArgs(context, cluster))
+	stdOut, stdErr, err := runner.ShellRun(DefaultTFModuleGeneratorScriptPath, generateDefaultScriptArgs(context, cluster))
+	log.Log.Infof("std outputs err: %s, out: %s", stdOut, stdErr)
 	return err
 }
 
@@ -81,8 +82,8 @@ func generateDefaultScriptArgs(context *common.ProjectContext, cluster *common.W
 func applyTerraformModules(context *common.ProjectContext, cluster *common.WorkspaceCluster) error {
 	tfModulesDir := fmt.Sprintf(DefaultGeneratedTFModulePathTemplate, context.Environment, cluster.Name)
 	commandToRun := fmt.Sprintf("cd %s && terraform init && terraform apply -auto-approve", tfModulesDir)
-	log.Log.Infof("terraform command: %s", commandToRun)
+	log.Log.Infof("apply terraform command: %s", commandToRun)
 	stdOut, stdErr, err := runner.ShellRun("/bin/sh", []string{"-c", commandToRun})
-	log.Log.Infof("std outputs err: %s, out: %s", stdOut, stdErr)
+	log.Log.Infof("apply std outputs err: %s, out: %s", stdOut, stdErr)
 	return err
 }
