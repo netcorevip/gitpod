@@ -24,9 +24,9 @@ type MetaCluster struct {
 // WorkspaceCluster represents a workspace cluster
 type WorkspaceCluster struct {
 	Name        string      `yaml:"name"`
-	Region      string      `yaml:"string"`
+	Region      string      `yaml:"region"`
 	Prefix      string      `yaml:"prefix"`
 	GovernedBy  string      `yaml:"governedBy"`
-	ClusterType ClusterType `yaml:"clusterType"`
+	ClusterType ClusterType `yaml:"type"`
 	Create      bool        `yaml:"create"`
 }

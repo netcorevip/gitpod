@@ -41,8 +41,8 @@ type Config struct {
 	Version string                `yaml:"version"`
 	Project common.ProjectContext `yaml:"project"`
 	// MetaClusters is optional as we may not want to register the cluster
-	MetaClusters      []*common.MetaCluster     `yaml:"metaClusters"`
-	WorkspaceClusters []common.WorkspaceCluster `yaml:"workspaceClusters"`
+	MetaClusters      []*common.MetaCluster      `yaml:"metaClusters"`
+	WorkspaceClusters []*common.WorkspaceCluster `yaml:"workspaceClusters"`
 	// TODO(princerachit): Add gitpod version here when we decide to use installed instead of relying solely on ops repository
 }
 
