@@ -40,17 +40,17 @@ func CreateCluster(context *common.ProjectContext, cluster common.WorkspaceClust
 	if err != nil {
 		return err
 	}
-	err = applyTerraformModules(context, cluster)
-	if err != nil {
-		return err
-	}
+	// err = applyTerraformModules(context, cluster)
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
 func doesClusterExist(context *common.ProjectContext, cluster common.WorkspaceCluster) (bool, error) {
 	commandToRun := "gcloud"
 	// container clusters describe gp-stag-ws-us11-us-weswt1 --project gitpod-staging --region us-west1
-	argsString := fmt.Sprintf("container clusters describe %s --project %s --region %s", cluster.Name, context.ProjectId, cluster.Region)
+	argsString := fmt.Sprintf("container clusters describe %s --project %s --region %s", cluster.Name, context.Id, cluster.Region)
 	err := runner.ShellRun(commandToRun, strings.Split(argsString, " "))
 	if err == nil {
 		return true, nil
@@ -69,7 +69,7 @@ func generateTerraformModules(context *common.ProjectContext, cluster common.Wor
 func generateDefaultScriptArgs(context *common.ProjectContext, cluster common.WorkspaceCluster) []string {
 	// example `-e staging -l europe-west1 -n us89 -t k3s -g gitpod-staging -w gitpod-staging -d gitpod-staging-com`
 	argsString := fmt.Sprintf("-e %s -l %s -n %s -t %s -g %s -w %s -d %s",
-		context.Environment, cluster.Region, cluster.Name, cluster.ClusterType, context.ProjectId, context.Network, context.DNSZone,
+		context.Environment, cluster.Region, cluster.Name, cluster.ClusterType, context.Id, context.Network, context.DNSZone,
 	)
 	return strings.Split(argsString, " ")
 }

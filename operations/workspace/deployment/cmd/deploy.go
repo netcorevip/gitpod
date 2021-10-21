@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/gitpod-io/gitpod/ws-deployment/pkg/orchestrate"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +31,8 @@ var deployCmd = &cobra.Command{
 		cfg := getConfig()
 		randomId := fmt.Sprintf("%d", rand.Intn(200)+100)
 		cfg.InitializeWorkspaceClusterNames(randomId) // TODO(prs):revisit and update this
+		fmt.Printf("%+v", cfg)
+		orchestrate.Deploy(&cfg.Project, cfg.WorkspaceClusters)
 	},
 }
 

@@ -38,8 +38,8 @@ import (
 //   type: gke
 
 type Config struct {
-	Version string `yaml:"version"`
-	common.ProjectContext
+	Version string                `yaml:"version"`
+	Project common.ProjectContext `yaml:"project"`
 	// MetaClusters is optional as we may not want to register the cluster
 	MetaClusters      []*common.MetaCluster     `yaml:"metaClusters"`
 	WorkspaceClusters []common.WorkspaceCluster `yaml:"workspaceClusters"`

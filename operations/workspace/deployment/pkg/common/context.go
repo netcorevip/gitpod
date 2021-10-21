@@ -10,7 +10,7 @@ import "k8s.io/client-go/kubernetes"
 // right GCP project with correct inputs
 type ProjectContext struct {
 	GCPSACredFile string `yaml:"gcpSACredFile"`
-	ProjectId     string `yaml:"projectId"`
+	Id            string `yaml:"id"`
 	Environment   string `yaml:"environment"`
 	Network       string `yaml:"network"`
 	DNSZone       string `yaml:"dnsZone"`
