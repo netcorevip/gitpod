@@ -81,6 +81,8 @@ func generateDefaultScriptArgs(context *common.ProjectContext, cluster *common.W
 func applyTerraformModules(context *common.ProjectContext, cluster *common.WorkspaceCluster) error {
 	tfModulesDir := fmt.Sprintf(DefaultGeneratedTFModulePathTemplate, context.Environment, cluster.Name)
 	commandToRun := fmt.Sprintf("cd %s && terraform init && terraform apply -auto-approve", tfModulesDir)
-	_, _, err := runner.ShellRun("/bin/sh", []string{"-c", commandToRun})
+	log.Infof("terraform command: %s", commandToRun)
+	stdOut, stdErr, err := runner.ShellRun("/bin/sh", []string{"-c", commandToRun})
+	log.Infof("std outputs err: %s, out: %s", stdOut, stdErr)
 	return err
 }
