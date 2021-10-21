@@ -2,7 +2,7 @@ version: v1
 project:
   id: gitpod-staging
   environment: staging
-  gcpSACredFile: /mnt/secrets/gcp-sa
+  gcpSACredFile: /mnt/secrets/gcp-sa/service-account.json
   network: gitpod-staging
   dnsZone: gitpod-staging-com
 metaClusters:
