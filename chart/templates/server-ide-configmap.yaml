@@ -4,6 +4,13 @@
 {{ $comp := .Values.components.server -}}
 {{- $this := dict "root" . "gp" $.Values "comp" $comp -}}
 
+{{- define "stable-image-full" -}}
+{{- $ := .root -}}
+{{- $gp := .gp -}}
+{{- $comp := .comp -}}
+{{ template "gitpod.comp.imageRepo" . }}:{{ $comp.stableVersion }}
+{{- end -}}
+
 {{- define "insider-image-full" -}}
 {{- $ := .root -}}
 {{- $gp := .gp -}}
@@ -14,8 +21,8 @@
 {{- define "ide-images-aliases"}}
 {{- $ := .root -}}
 {{- $gp := .gp -}}
-code-latest: {{ (include "gitpod.comp.imageFull" (dict "root" $ "gp" $gp "comp" $gp.components.workspace.codeImage)) }}
-code: {{ (include "insider-image-full" (dict "root" $ "gp" $gp "comp" $gp.components.workspace.codeImage)) }}
+code: {{ (include "stable-image-full" (dict "root" $ "gp" $gp "comp" $gp.components.workspace.codeImage)) }}
+code-latest: {{ (include "insider-image-full" (dict "root" $ "gp" $gp "comp" $gp.components.workspace.codeImage)) }}
 {{ end }}
 
 {{- define "desktop-ide-images-aliases"}}
