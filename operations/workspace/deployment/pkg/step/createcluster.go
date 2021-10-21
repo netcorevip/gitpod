@@ -49,6 +49,7 @@ func CreateCluster(context *common.ProjectContext, cluster *common.WorkspaceClus
 }
 
 func doesClusterExist(context *common.ProjectContext, cluster *common.WorkspaceCluster) (bool, error) {
+	runner.ShellRun("gcloud", []string{})
 	commandToRun := "gcloud"
 	// container clusters describe gp-stag-ws-us11-us-weswt1 --project gitpod-staging --region us-west1
 	argsString := fmt.Sprintf("container clusters describe %s --project %s --region %s", cluster.Name, context.Id, cluster.Region)
