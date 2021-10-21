@@ -1,23 +1,23 @@
 version: v1
 project:
-  id: gitpod-staging
-  environment: staging
+  id: gitpod-dev-staging
+  environment: dev-staging
   gcpSACredFile: /mnt/secrets/gcp-sa/service-account.json
-  network: gitpod-staging
-  dnsZone: gitpod-staging-com
+  network: gitpod-dev-staging
+  dnsZone: gitpod-dev-staging-com
 metaClusters:
-- name: stag-meta-eu01
+- name: dev-stag-meta-eu01
   region: europe-west1
-- name: stag-meta-us01
+- name: dev-stag-meta-us01
   region: us-west1
 workspaceClusters:
 - region: europe-west1
   prefix: eu
-  governedBy: stag-meta-eu01
+  governedBy: dev-stag-meta-eu01
   create: true
   type: gke
 - region: us-west1
   prefix: us
-  governedBy: stag-meta-us01
+  governedBy: dev-stag-meta-us01
   create: true
   type: gke
