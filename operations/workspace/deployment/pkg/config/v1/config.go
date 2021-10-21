@@ -15,28 +15,28 @@ import (
 // Here is a sample representation of yaml configuration
 //
 // version: v1
-// projectId: gitpod-191109
-// environment: production
-// gcpSACredFile: /gcp-sa/credentials.json
-// network: gitpod-prod
-// dnsZone: gitpod-io
+// project:
+//   id: gitpod-dev-staging
+//   environment: dev-staging
+//   gcpSACredFile: /mnt/secrets/gcp-sa/service-account.json
+//   network: gitpod-dev-staging
+//   dnsZone: gitpod-dev-staging-com
 // metaClusters:
-// - name: prod-meta-eu00
+// - name: dev-stag-meta-eu01
 //   region: europe-west1
-// - name: prod-meta-us01
-//   region: us-west-1
+// - name: dev-stag-meta-us01
+//   region: us-west1
 // workspaceClusters:
 // - region: europe-west1
 //   prefix: eu
-//   governedBy: prod-meta-eu01
+//   governedBy: dev-stag-meta-eu01
 //   create: true
 //   type: gke
-// - region: us-east1
+// - region: us-west1
 //   prefix: us
-//   governedBy: prod-meta-us01
+//   governedBy: dev-stag-meta-us01
 //   create: true
 //   type: gke
-
 type Config struct {
 	Version string                `yaml:"version"`
 	Project common.ProjectContext `yaml:"project"`
