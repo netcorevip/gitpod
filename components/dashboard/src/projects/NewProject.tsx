@@ -261,7 +261,7 @@ export default function NewProject() {
                                 <div key={`repo-${index}-${r.account}-${r.name}`} className="flex p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 focus:bg-gitpod-kumquat-light transition ease-in-out group" >
 
                                     <div className="flex-grow">
-                                        <div className="text-base text-gray-900 dark:text-gray-50 font-medium rounded-xl whitespace-nowrap">{toSimpleName(r.name)}</div>
+                                        <div className="text-base text-gray-900 dark:text-gray-50 font-medium rounded-xl whitespace-nowrap">{toSimpleName(r.path)}</div>
                                         <p>Updated {moment(r.updatedAt).fromNow()}</p>
                                     </div>
                                     <div className="flex justify-end">

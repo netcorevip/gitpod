@@ -255,6 +255,7 @@ export interface GetProviderRepositoriesParams {
 }
 export interface ProviderRepository {
     name: string;
+    path?: string;
     account: string;
     accountAvatarUrl: string;
     cloneUrl: string;
