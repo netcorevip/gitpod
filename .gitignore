@@ -60,3 +60,4 @@ components/ws-proxy/ws-proxy
 
 # Logs
 components/server/*.log
+components/supervisor/supervisor
