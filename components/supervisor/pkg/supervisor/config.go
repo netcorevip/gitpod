@@ -151,8 +151,7 @@ func (c IDEConfig) Validate() error {
 	return nil
 }
 
-// WorkspaceConfig is the workspace specific configuration. This config is drawn exclusively
-// from environment variables.
+// WorkspaceConfig 是工作区特定的配置。 此配置仅从环境变量中提取。
 type WorkspaceConfig struct {
 	// WorkspaceContextURL is an URL for which workspace was created.
 	WorkspaceContextURL string `env:"GITPOD_WORKSPACE_CONTEXT_URL"`
@@ -200,7 +199,7 @@ type WorkspaceConfig struct {
 	// GitpodHost points to the Gitpod API server we're to talk to
 	GitpodHost string `env:"GITPOD_HOST"`
 
-	// GitpodTasks is the task configuration of the workspace
+	// GitpodTasks 是工作区的任务配置
 	GitpodTasks string `env:"GITPOD_TASKS"`
 
 	// GitpodHeadless controls whether the workspace is running headless
@@ -345,7 +344,7 @@ func (c WorkspaceConfig) getCommit() (commit *gitpod.Commit, err error) {
 	return
 }
 
-// GetConfig loads the supervisor configuration
+//GetConfig 加载主管配置
 func GetConfig() (*Config, error) {
 	static, err := loadStaticConfigFromFile()
 	if err != nil {
@@ -356,7 +355,7 @@ func GetConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// 工作区task等环境变量
 	workspace, err := loadWorkspaceConfigFromEnv()
 	if err != nil {
 		return nil, err
@@ -410,7 +409,7 @@ func loadIDEConfigFromFile(fn string) (*IDEConfig, error) {
 	return &res, nil
 }
 
-// loadWorkspaceConfigFromEnv loads the workspace configuration from environment variables.
+// loadWorkspaceConfigFromEnv 从环境变量加载工作区配置。
 func loadWorkspaceConfigFromEnv() (*WorkspaceConfig, error) {
 	var res WorkspaceConfig
 	_, err := env.UnmarshalFromEnviron(&res)

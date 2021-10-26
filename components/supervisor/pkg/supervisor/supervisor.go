@@ -111,7 +111,7 @@ const (
 	ShutdownReasonExecutionError ShutdownReason = 1
 )
 
-// Run serves as main entrypoint to the supervisor
+// Run 作为主管的主要入口点
 func Run(options ...RunOption) {
 	exitCode := 0
 	defer handleExit(&exitCode)
@@ -251,11 +251,13 @@ func Run(options ...RunOption) {
 	wg.Add(1)
 	go startContentInit(ctx, cfg, &wg, cstate)
 	wg.Add(1)
+	// 启动一个grpc服务
 	go startAPIEndpoint(ctx, cfg, &wg, apiServices, tunneledPortsService, apiEndpointOpts...)
 	wg.Add(1)
 	go startSSHServer(ctx, cfg, &wg)
 	wg.Add(1)
 	tasksSuccessChan := make(chan taskSuccess, 1)
+	// 运行task任务
 	go taskManager.Run(ctx, &wg, tasksSuccessChan)
 	wg.Add(1)
 	go socketActivationForDocker(ctx, &wg, termMux)
@@ -745,6 +747,7 @@ func startAPIEndpoint(ctx context.Context, cfg *Config, wg *sync.WaitGroup, serv
 	m := cmux.New(l)
 	restMux := grpcruntime.NewServeMux()
 	grpcMux := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	// 构造一个gRPC服务对象
 	grpcServer := grpc.NewServer(opts...)
 	grpcEndpoint := fmt.Sprintf("localhost:%d", cfg.APIEndpointPort)
 	for _, reg := range services {
