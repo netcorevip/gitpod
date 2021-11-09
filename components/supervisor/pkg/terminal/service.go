@@ -78,8 +78,8 @@ func (srv *MuxTerminalService) Open(ctx context.Context, req *api.OpenTerminalRe
 	})
 }
 
-// OpenWithOptions opens a new terminal running the shell with given options.
-// req.Annotations override options.Annotations.
+// OpenWithOptions 打开一个新终端，运行带有给定选项的 shell。
+// req.Annotations 覆盖 options.Annotations。
 func (srv *MuxTerminalService) OpenWithOptions(ctx context.Context, req *api.OpenTerminalRequest, options TermOptions) (*api.OpenTerminalResponse, error) {
 	shell := req.Shell
 	if shell == "" {
@@ -119,7 +119,7 @@ func (srv *MuxTerminalService) OpenWithOptions(ctx context.Context, req *api.Ope
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	// starterToken is just relevant for the service, hence it's not exposed at the Start() call
+	// starterToken 只与服务相关，因此它不会在 Start() 调用中公开
 	var starterToken string
 	term := srv.Mux.terms[alias]
 	if term != nil {

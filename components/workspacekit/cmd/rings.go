@@ -880,7 +880,7 @@ func sleepForDebugging() {
 	if os.Getenv("GITPOD_WORKSPACEKIT_SLEEP_FOR_DEBUGGING") != "true" {
 		return
 	}
-
+// https://cloud.tencent.com/developer/article/1645996
 	log.Info("sleeping five minutes to allow debugging")
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -910,7 +910,7 @@ func (iwsc *inWorkspaceServiceClient) Close() error {
 	return iwsc.conn.Close()
 }
 
-// ConnectToInWorkspaceDaemonService attempts to connect to the InWorkspaceService offered by the ws-daemon.
+// ConnectToInWorkspaceDaemonService 尝试连接到 ws-daemon 提供的 InWorkspaceService。
 func connectToInWorkspaceDaemonService(ctx context.Context) (*inWorkspaceServiceClient, error) {
 	const socketFN = "/.workspace/daemon.sock"
 

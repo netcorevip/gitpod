@@ -79,6 +79,7 @@ COPY --from=builder_alpine /theia/ /theia/
 
 ENV GITPOD_ENV_SET_GITPOD_BUILT_IN_PLUGINS /theia/theia-app/plugins/
 
+# 当supervisor不是来自此图像时使用的标准supervisor入口点
 # standard supervisor entrypoint used when supervisor isn't coming from this image
 WORKDIR /ide/
 COPY supervisor-ide-config.json /ide/

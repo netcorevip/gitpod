@@ -168,6 +168,7 @@ func (tm *tasksManager) setTaskState(t *task, newState api.TaskState) {
 	})
 }
 
+//task初始化，从环境变量读取
 func (tm *tasksManager) init(ctx context.Context) {
 	defer close(tm.ready)
 
@@ -218,6 +219,7 @@ func (tm *tasksManager) init(ctx context.Context) {
 			successChan: make(chan taskSuccess, 1),
 			title:       title,
 		}
+		// 生成shell命令
 		task.command = getCommand(task, tm.config.isHeadless(), tm.contentSource, tm.storeLocation)
 		if tm.config.isHeadless() && task.command == "exit" {
 			task.State = api.TaskState_closed
@@ -227,6 +229,7 @@ func (tm *tasksManager) init(ctx context.Context) {
 	}
 }
 
+//task运行处理
 func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup, successChan chan taskSuccess) {
 	defer wg.Done()
 	defer log.Debug("tasksManager shutdown")
@@ -243,8 +246,8 @@ func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup, successChan
 		if t.config.Env != nil {
 			openRequest.Env = make(map[string]string, len(*t.config.Env))
 			for key, value := range *t.config.Env {
-				// Required check because a string is considered valid JSON (e.g. "hello")
-				// We don't want to marshall basic strings otherwise we get a double quoted environment variable
+				//需要检查，因为字符串被认为是有效的 JSON（例如“hello”）
+				// 我们不想对基本字符串进行编组，否则我们会得到一个双引号环境变量
 				// See: https://github.com/gitpod-io/gitpod/issues/5887
 				if val, ok := value.(string); ok {
 					openRequest.Env[key] = val

@@ -67,7 +67,7 @@ func logLevelFromEnv() {
 	Log.Logger.SetLevel(newLevel)
 }
 
-// Init initializes/configures the application-wide logger
+// Init 初始化/配置应用程序范围的记录器
 func Init(service, version string, json, verbose bool) {
 	Log = log.WithFields(log.Fields{
 		"serviceContext": ServiceContext{service, version},

@@ -47,8 +47,7 @@ func (m *Mux) Get(alias string) (*Term, bool) {
 	return term, ok
 }
 
-// Start starts a new command in its own pseudo-terminal and returns an alias
-// for that pseudo terminal.
+// Start 在其自己的伪终端中启动一个新命令，并返回该伪终端的别名。
 func (m *Mux) Start(cmd *exec.Cmd, options TermOptions) (alias string, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -186,9 +185,9 @@ func (term *Term) shutdownProcessImmediately() error {
 	return nil
 }
 
-// terminalBacklogSize is the number of bytes of output we'll store in RAM for each terminal.
-// The higher this number is, the better the UX, but the higher the resource requirements are.
-// For now we assume an average of five terminals per workspace, which makes this consume 1MiB of RAM.
+// terminalBacklogSize 是我们将为每个终端存储在 RAM 中的输出字节数。
+// 这个数字越高，用户体验越好，但资源要求越高。
+// 现在我们假设每个工作区平均有五个终端，这使得它消耗 1MiB 的 RAM。
 const terminalBacklogSize = 256 << 10
 
 func newTerm(alias string, pty *os.File, cmd *exec.Cmd, options TermOptions) (*Term, error) {

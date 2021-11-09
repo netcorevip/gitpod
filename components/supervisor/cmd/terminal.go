@@ -16,6 +16,7 @@ import (
 	"github.com/gitpod-io/gitpod/supervisor/pkg/supervisor"
 )
 
+// 与主管的终端多路复用器交互
 var terminalCmd = &cobra.Command{
 	Use:    "terminal",
 	Short:  "interacts with supervisor's terminal mux",
@@ -35,6 +36,7 @@ func dialSupervisor() *grpc.ClientConn {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	url := fmt.Sprintf("localhost:%d", cfg.APIEndpointPort)
+	// 建立连接22999
 	conn, err := grpc.DialContext(ctx, url, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.WithError(err).Fatal("cannot connect to supervisor")

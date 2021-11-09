@@ -31,7 +31,7 @@ var openCmd = &cobra.Command{
 			// opening in Theia worked - we're good
 			return
 		}
-
+// /ide/node/bin/gitpod-node /ide/out/gitpod-cli.js "$@"
 		pcmd := os.Getenv("GP_OPEN_EDITOR")
 		if pcmd == "" {
 			log.Fatal("GP_OPEN_EDITOR is not set")

@@ -18,7 +18,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// HTTPTheiaService provides access to Theia's CLI service
+// HTTPTheiaService 提供对 Theia 的 CLI 服务的访问
 type HTTPTheiaService struct {
 	URL       string
 	Token     string
@@ -29,7 +29,7 @@ type HTTPTheiaService struct {
 
 var _ TheiaCLIService = &HTTPTheiaService{}
 
-// NewServiceFromEnv produces a new Theia service client configured from environment variables
+// NewServiceFromEnv 生成一个从环境变量配置的新 Theia 服务客户端
 func NewServiceFromEnv() (*HTTPTheiaService, error) {
 	theiaPort := os.Getenv("GITPOD_THEIA_PORT")
 	if theiaPort == "" {
@@ -113,7 +113,7 @@ func (service *HTTPTheiaService) sendRequest(req request) ([]byte, error) {
 	return res, nil
 }
 
-// GetGitToken obtains a user's Git token for a particular action
+// GetGitToken 为特定操作获取用户的 Git 令牌
 func (service *HTTPTheiaService) GetGitToken(params GetGitTokenRequest) (*GetGitTokenResponse, error) {
 	req := request{Method: "getGitToken", Params: params}
 	rawResult, err := service.sendRequest(req)
@@ -129,7 +129,7 @@ func (service *HTTPTheiaService) GetGitToken(params GetGitTokenRequest) (*GetGit
 	return &res, nil
 }
 
-// OpenPreview opens a file using Theia's preview capability
+// OpenPreview 使用 Theia 的预览功能打开文件
 func (service *HTTPTheiaService) OpenPreview(params OpenPreviewRequest) (*OpenPreviewResponse, error) {
 	req := request{Method: "openPreview", Params: params}
 	_, err := service.sendRequest(req)
@@ -140,7 +140,7 @@ func (service *HTTPTheiaService) OpenPreview(params OpenPreviewRequest) (*OpenPr
 	return &OpenPreviewResponse{}, nil
 }
 
-// OpenFile opens a file in an editor
+// OpenFile 在编辑器中打开文件
 func (service *HTTPTheiaService) OpenFile(params OpenFileRequest) (*OpenFileResponse, error) {
 	absPath, err := filepath.Abs(params.Path)
 	if err != nil {
@@ -200,7 +200,7 @@ func (service *HTTPTheiaService) SetEnvVar(params SetEnvvarRequest) (*SetEnvvarR
 	return &SetEnvvarResponse{}, nil
 }
 
-// GetEnvVars returns the list of Gitpod env vars for this workspace
+// GetEnvVars 返回此工作区的 Gitpod 环境变量列表
 func (service *HTTPTheiaService) GetEnvVars(GetEnvvarsRequest) (*GetEnvvarsResponse, error) {
 	req := request{Method: "getEnvVars", Params: GetEnvvarsRequest{}}
 	rawResult, err := service.sendRequest(req)
@@ -232,7 +232,7 @@ func (service *HTTPTheiaService) DeleteEnvVar(params DeleteEnvvarRequest) (*Dele
 	return &res, nil
 }
 
-// GetPortURL returns the public, outward-facing URL of a port
+// GetPortURL 返回端口的公共、面向外的 URL
 func (service *HTTPTheiaService) GetPortURL(params GetPortURLRequest) (*GetPortURLResponse, error) {
 	req := request{Method: "getPortURL", Params: params}
 	rawResult, err := service.sendRequest(req)

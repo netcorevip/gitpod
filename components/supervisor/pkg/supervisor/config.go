@@ -173,8 +173,7 @@ func (c IDEConfig) Validate() error {
 	return nil
 }
 
-// WorkspaceConfig is the workspace specific configuration. This config is drawn exclusively
-// from environment variables.
+// WorkspaceConfig 是工作区特定的配置。 此配置仅从环境变量中提取。
 type WorkspaceConfig struct {
 	// WorkspaceContextURL is an URL for which workspace was created.
 	WorkspaceContextURL string `env:"GITPOD_WORKSPACE_CONTEXT_URL"`
@@ -222,7 +221,7 @@ type WorkspaceConfig struct {
 	// GitpodHost points to the Gitpod API server we're to talk to
 	GitpodHost string `env:"GITPOD_HOST"`
 
-	// GitpodTasks is the task configuration of the workspace
+	// GitpodTasks 是工作区的任务配置
 	GitpodTasks string `env:"GITPOD_TASKS"`
 
 	// GitpodHeadless controls whether the workspace is running headless
@@ -281,7 +280,7 @@ func (c WorkspaceConfig) Validate() error {
 	return nil
 }
 
-// GetTokens parses tokens from GITPOD_TOKENS and possibly downloads OTS.
+// GetTokens 从 GITPOD_TOKENS 解析令牌并可能下载 OTS。
 func (c WorkspaceConfig) GetTokens(downloadOTS bool) ([]WorkspaceGitpodToken, error) {
 	if c.Tokens == "" {
 		return nil, nil
@@ -322,7 +321,8 @@ func (c WorkspaceConfig) GetTokens(downloadOTS bool) ([]WorkspaceGitpodToken, er
 	return tks, nil
 }
 
-// GitpodAPIEndpoint produces the data required to connect to the Gitpod API.
+
+// GitpodAPIEndpoint 生成连接到 Gitpod API 所需的数据
 func (c WorkspaceConfig) GitpodAPIEndpoint() (endpoint, host string, err error) {
 	gphost, err := url.Parse(c.GitpodHost)
 	if err != nil {
@@ -338,7 +338,8 @@ func (c WorkspaceConfig) GitpodAPIEndpoint() (endpoint, host string, err error) 
 	return
 }
 
-// getGitpodTasks returns true if the workspace is headless.
+
+// 如果工作区是无头的，则 getGitpodTasks 返回 true
 func (c WorkspaceConfig) isHeadless() bool {
 	return c.GitpodHeadless == "true"
 }
@@ -367,7 +368,8 @@ func (c WorkspaceConfig) getCommit() (commit *gitpod.Commit, err error) {
 	return
 }
 
-// GetConfig loads the supervisor configuration.
+
+//GetConfig 加载主管配置
 func GetConfig() (*Config, error) {
 	static, err := loadStaticConfigFromFile()
 	if err != nil {
@@ -379,6 +381,7 @@ func GetConfig() (*Config, error) {
 		return nil, err
 	}
 
+
 	var desktopIde *IDEConfig
 	if static.DesktopIDEConfigLocation != "" {
 		if _, err := os.Stat(static.DesktopIDEConfigLocation); !os.IsNotExist((err)) {
@@ -388,6 +391,9 @@ func GetConfig() (*Config, error) {
 			}
 		}
 	}
+
+
+	// 工作区task等环境变量
 
 	workspace, err := loadWorkspaceConfigFromEnv()
 	if err != nil {
@@ -402,9 +408,7 @@ func GetConfig() (*Config, error) {
 	}, nil
 }
 
-// loadStaticConfigFromFile loads the static supervisor configuration from
-// a file named "supervisor-config.json" which is expected right next to
-// the supervisor executable.
+// loadStaticConfigFromFile 从名为“supervisor-config.json”的文件加载静态supervisor配置，该文件应该紧邻supervisor可执行文件。
 func loadStaticConfigFromFile() (*StaticConfig, error) {
 	loc, err := os.Executable()
 	if err != nil {
@@ -443,7 +447,7 @@ func loadIDEConfigFromFile(fn string) (*IDEConfig, error) {
 	return &res, nil
 }
 
-// loadWorkspaceConfigFromEnv loads the workspace configuration from environment variables.
+// loadWorkspaceConfigFromEnv 从环境变量加载工作区配置。
 func loadWorkspaceConfigFromEnv() (*WorkspaceConfig, error) {
 	var res WorkspaceConfig
 	_, err := env.UnmarshalFromEnviron(&res)

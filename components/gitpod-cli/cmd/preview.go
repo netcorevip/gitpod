@@ -54,6 +54,7 @@ var previewCmd = &cobra.Command{
 
 func openPreview(gpBrowserEnvVar string, url string) {
 	pcmd := os.Getenv(gpBrowserEnvVar)
+	//  /ide/bin/code --command gitpod.api.preview
 	if pcmd == "" {
 		log.Fatalf("%s is not set", gpBrowserEnvVar)
 		return
