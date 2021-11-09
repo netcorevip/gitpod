@@ -32,6 +32,7 @@ Create a Gitpod configuration for this project.
 	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := gitpodlib.GitpodFile{}
+		// 交互生成.gitpod.yml文件
 		if interactive {
 			if err := askForDockerImage(&cfg); err != nil {
 				log.Fatal(err)

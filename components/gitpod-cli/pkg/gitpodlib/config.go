@@ -26,24 +26,24 @@ type GitpodFile struct {
 	WorkspaceLocation string       `yaml:"workspaceLocation,omitempty"`
 }
 
-// SetImageName configures a pre-built docker image by name
+//SetImageName 按名称配置预先构建的 docker 镜像
 func (cfg *GitpodFile) SetImageName(name string) {
 	cfg.Image = name
 }
 
-// SetImage configures a Dockerfile as workspace image
+// SetImage 将 Dockerfile 配置为工作区映像
 func (cfg *GitpodFile) SetImage(img GitpodImage) {
 	cfg.Image = img
 }
 
-// AddPort adds a port to the list of exposed ports
+// AddPort 将端口添加到暴露端口列表中
 func (cfg *GitpodFile) AddPort(port int32) {
 	cfg.Ports = append(cfg.Ports, gitpodPort{
 		Number: port,
 	})
 }
 
-// AddTask adds a workspace startup task
+// AddTask 添加工作区启动任务
 func (cfg *GitpodFile) AddTask(task ...string) {
 	if len(task) > 1 {
 		cfg.Tasks = append(cfg.Tasks, gitpodTask{
