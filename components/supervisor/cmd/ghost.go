@@ -23,6 +23,7 @@ var ghostCmd = &cobra.Command{
 		log.Info("running as ghost - waiting for SIGTERM")
 
 		sigChan := make(chan os.Signal, 1)
+		//https://blog.csdn.net/chuanglan/article/details/80750119
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		<-sigChan
 

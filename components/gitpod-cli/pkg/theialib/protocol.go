@@ -8,9 +8,9 @@ package theialib
 //go:generate sh -c "go get github.com/golang/mock/mockgen@latest"
 //go:generate sh -c "mockgen -package theialib -source=protocol.go > mock.go_; mv mock.go_ mock.go; go mod tidy -compat=1.17"
 
-// Use go generate to regenerate the Typescript protocol file
+// 使用 go generate 重新生成 Typescript 协议文件
 
-// TheiaCLIService offers services through the Theia backend/frontend
+//TheiaCLIService 通过 Theia 后端/前端提供服务
 type TheiaCLIService interface {
 	GetGitToken(GetGitTokenRequest) (*GetGitTokenResponse, error)
 	OpenPreview(OpenPreviewRequest) (*OpenPreviewResponse, error)

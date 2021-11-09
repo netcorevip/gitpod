@@ -128,6 +128,7 @@ func Run(options ...RunOption) {
 		log.WithError(err).Fatal("configuration error")
 	}
 	if len(os.Args) < 2 || os.Args[1] != "run" {
+		//supervisor 确保您的工作区/IDE 保持平稳运行。您不必调用这个东西，Gitpod 会为您调用它。
 		fmt.Println("supervisor makes sure your workspace/IDE keeps running smoothly.\nYou don't have to call this thing, Gitpod calls it for you.")
 		return
 	}

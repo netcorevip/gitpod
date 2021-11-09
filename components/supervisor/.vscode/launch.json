@@ -5,6 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Launch supervisor",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                ""
+            ]
+        },
+        {
             "name": "Launch run",
             "type": "go",
             "request": "launch",
@@ -13,6 +23,28 @@
             "args": [
                 "run"
             ]
+        },
+        {
+            "name": "Launch list",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "terminal","list"
+            ]
+        },
+        {
+            "name": "Launch terminal new",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "terminal","new","cccccc"
+            ]
         }
     ]
 }
+
+//  terminal new aaaacc

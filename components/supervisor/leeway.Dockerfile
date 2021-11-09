@@ -4,9 +4,8 @@
 
 FROM scratch
 
-# BEWARE: This must be the first layer in the image, s.t. that blobserve
-#         can serve the IDE host. Even moving WORKDIR before this line
-#         would break things.
+# 注意：这必须是图像中的第一层，s.t. 那个 blobserve
+# 可以服务IDE主机。 即使在这条线之前移动 WORKDIR 也会破坏事情。
 COPY components-supervisor-frontend--app/node_modules/@gitpod/supervisor-frontend/dist/ /.supervisor/frontend/
 
 WORKDIR "/.supervisor"
