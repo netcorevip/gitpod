@@ -61,3 +61,6 @@ components/ws-proxy/ws-proxy
 # Logs
 components/server/*.log
 components/supervisor/supervisor
+components/workspacekit/workspacekit
+components/gitpod-cli/gitpod-cli
+components/supervisor/env111.txt

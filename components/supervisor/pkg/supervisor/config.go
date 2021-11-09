@@ -258,7 +258,7 @@ func (c WorkspaceConfig) Validate() error {
 	return nil
 }
 
-// GetTokens parses tokens from GITPOD_TOKENS and possibly downloads OTS.
+// GetTokens 从 GITPOD_TOKENS 解析令牌并可能下载 OTS。
 func (c WorkspaceConfig) GetTokens(downloadOTS bool) ([]WorkspaceGitpodToken, error) {
 	if c.Tokens == "" {
 		return nil, nil
@@ -299,7 +299,7 @@ func (c WorkspaceConfig) GetTokens(downloadOTS bool) ([]WorkspaceGitpodToken, er
 	return tks, nil
 }
 
-// GitpodAPIEndpoint produces the data required to connect to the Gitpod API
+// GitpodAPIEndpoint 生成连接到 Gitpod API 所需的数据
 func (c WorkspaceConfig) GitpodAPIEndpoint() (endpoint, host string, err error) {
 	gphost, err := url.Parse(c.GitpodHost)
 	if err != nil {
@@ -315,7 +315,7 @@ func (c WorkspaceConfig) GitpodAPIEndpoint() (endpoint, host string, err error) 
 	return
 }
 
-// getGitpodTasks returns true if the workspace is headless
+// 如果工作区是无头的，则 getGitpodTasks 返回 true
 func (c WorkspaceConfig) isHeadless() bool {
 	return c.GitpodHeadless == "true"
 }
@@ -368,9 +368,7 @@ func GetConfig() (*Config, error) {
 	}, nil
 }
 
-// loadStaticConfigFromFile loads the static supervisor configuration from
-// a file named "supervisor-config.json" which is expected right next to
-// the supervisor executable.
+// loadStaticConfigFromFile 从名为“supervisor-config.json”的文件加载静态supervisor配置，该文件应该紧邻supervisor可执行文件。
 func loadStaticConfigFromFile() (*StaticConfig, error) {
 	loc, err := os.Executable()
 	if err != nil {
