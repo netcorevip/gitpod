@@ -58,7 +58,29 @@ function isGitpodIo() {
 }
 
 function isWebsiteSlug(pathName: string) {
-    const slugs = ['chat', 'code-of-conduct', 'features', 'screencasts', 'blog', 'docs', 'changelog', 'pricing', 'self-hosted', 'gitpod-vs-github-codespaces', 'support', 'about', 'careers', 'contact', 'media-kit', 'imprint', 'terms', 'privacy', 'values']
+    const slugs = [
+        'about',
+        'blog',
+        'careers',
+        'changelog',
+        'chat',
+        'code-of-conduct',
+        'contact',
+        'docs',
+        'features',
+        'for',
+        'gitpod-vs-github-codespaces',
+        'imprint',
+        'media-kit',
+        'pricing',
+        'privacy',
+        'security',
+        'screencasts',
+        'self-hosted',
+        'support',
+        'terms',
+        'values'
+    ]
     return slugs.some(slug => pathName.startsWith('/' + slug + '/') || pathName === ('/' + slug));
 }
 
@@ -221,7 +243,7 @@ function App() {
     window.addEventListener("hashchange", () => {
         // Refresh on hash change if the path is '/' (new context URL)
         if (window.location.pathname === '/') {
-            window.location.reload(true);
+            window.location.reload();
         }
     }, false);
 
@@ -334,6 +356,13 @@ function App() {
     </Route>;
 
     const hash = getURLHash();
+    if (/^(https:\/\/)?github\.dev\//i.test(hash)) {
+        window.location.hash = hash.replace(/^(https:\/\/)?github\.dev\//i, 'https://github.com/')
+        return <div></div>
+    } else if (/^([^\/]+?=[^\/]*?|prebuild)\/(https:\/\/)?github\.dev\//i.test(hash)) {
+        window.location.hash = hash.replace(/^([^\/]+?=[^\/]*?|prebuild)\/(https:\/\/)?github\.dev\//i, '$1/https://github.com/')
+        return <div></div>
+    }
     const isCreation = window.location.pathname === '/' && hash !== '';
     const isWsStart = /\/start\/?/.test(window.location.pathname) && hash !== '';
     if (isWhatsNewShown) {
@@ -342,6 +371,12 @@ function App() {
         toRender = <CreateWorkspace contextUrl={hash} />;
     } else if (isWsStart) {
         toRender = <StartWorkspace workspaceId={hash} />;
+    } else if (/.+?\..+?\/.+?/i.test(window.location.pathname)) {
+        let url = new URL(window.location.href)
+        url.hash = url.pathname
+        url.pathname = '/'
+        window.location.replace(url)
+        return <div></div>
     }
 
     return (

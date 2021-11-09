@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 
@@ -23,8 +24,11 @@ var (
 )
 
 var cfgFile string
+var versionsManifestFile string
 var jsonLog bool
 var verbose bool
+var dryRun bool
+var overwriteExisting bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -46,8 +50,11 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "c", "config file (default is $HOME/ws-deployment.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "./ws-deployment.yaml", "config file (default is ./ws-deployment.yaml)")
+	rootCmd.PersistentFlags().StringVar(&versionsManifestFile, "versions-manifest", "./versions.yaml", "versions manifest file (default is ./versions.yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&jsonLog, "json-log", "j", true, "produce JSON log output on verbose level")
+	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "performs a dry run without creating or modifying any resources in the cloud")
+	rootCmd.PersistentFlags().BoolVar(&overwriteExisting, "overwrite", false, "overwrites any existing settings/configuration of a deployment if it exists")
 }
 
 func getConfig() *v1.Config {
@@ -64,4 +71,10 @@ func getConfig() *v1.Config {
 	}
 
 	return &cfg
+}
+
+func verifyVersionsManifestFilePath(path string) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		log.WithError(err).Fatal("versions manifest file path does not exist. Maybe incorrect file path ?")
+	}
 }

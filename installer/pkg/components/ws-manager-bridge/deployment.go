@@ -5,6 +5,7 @@
 package wsmanagerbridge
 
 import (
+	"fmt"
 	"github.com/gitpod-io/gitpod/installer/pkg/common"
 	wsmanager "github.com/gitpod-io/gitpod/installer/pkg/components/ws-manager"
 
@@ -19,6 +20,27 @@ import (
 func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 	labels := common.DefaultLabels(Component)
 
+	var hashObj []runtime.Object
+	if objs, err := configmap(ctx); err != nil {
+		return nil, err
+	} else {
+		hashObj = append(hashObj, objs...)
+	}
+
+	hashObj = append(hashObj, &corev1.Pod{Spec: corev1.PodSpec{
+		Containers: []corev1.Container{{
+			Env: []corev1.EnvVar{{
+				Name:  "MESSAGEBUS_PASSWORD",
+				Value: ctx.Values.MessageBusPassword,
+			}},
+		}},
+	}})
+
+	configHash, err := common.ObjectHash(hashObj, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	return []runtime.Object{
 		&appsv1.Deployment{
 			TypeMeta: common.TypeMetaDeployment,
@@ -29,7 +51,6 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 			},
 			Spec: appsv1.DeploymentSpec{
 				Selector: &metav1.LabelSelector{MatchLabels: labels},
-				// todo(sje): receive config value
 				Replicas: pointer.Int32(1),
 				Strategy: common.DeploymentStrategy,
 				Template: corev1.PodTemplateSpec{
@@ -37,11 +58,14 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 						Name:      Component,
 						Namespace: ctx.Namespace,
 						Labels:    labels,
+						Annotations: map[string]string{
+							common.AnnotationConfigChecksum: configHash,
+						},
 					},
 					Spec: corev1.PodSpec{
 						Affinity:                      &corev1.Affinity{},
 						ServiceAccountName:            Component,
-						PriorityClassName:             "system-node-critical",
+						PriorityClassName:             common.SystemNodeCritical,
 						EnableServiceLinks:            pointer.Bool(false),
 						DNSPolicy:                     "ClusterFirst",
 						RestartPolicy:                 "Always",
@@ -50,7 +74,7 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: Component},
+									LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-config", Component)},
 								},
 							},
 						}, {
@@ -64,8 +88,7 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 						InitContainers: []corev1.Container{*common.DatabaseWaiterContainer(ctx), *common.MessageBusWaiterContainer(ctx)},
 						Containers: []corev1.Container{{
 							Name:            Component,
-							Args:            []string{"run", "-v", "/mnt/config/config.json"},
-							Image:           common.ImageName(ctx.Config.Repository, Component, ctx.VersionManifest.Components.Blobserve.Version),
+							Image:           common.ImageName(ctx.Config.Repository, Component, ctx.VersionManifest.Components.WSManagerBridge.Version),
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -90,7 +113,7 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 							),
 							VolumeMounts: []corev1.VolumeMount{{
 								Name:      "config",
-								MountPath: "/mnt/config",
+								MountPath: "/config",
 								ReadOnly:  true,
 							}, {
 								Name:      "ws-manager-client-tls-certs",

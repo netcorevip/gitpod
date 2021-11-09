@@ -1,7 +1,7 @@
 import * as shell from 'shelljs';
 import * as fs from 'fs';
-import * as path from 'path';
-import { werft, exec, gitTag } from './util/shell';
+import { exec } from './util/shell';
+import { Werft } from './util/werft';
 import { waitForDeploymentToSucceed, wipeAndRecreateNamespace, setKubectlContextNamespace, deleteNonNamespaceObjects, findFreeHostPorts, createNamespace } from './util/kubectl';
 import { issueCertficate, installCertficate, IssueCertificateParams, InstallCertificateParams } from './util/certs';
 import { reportBuildFailureInSlack } from './util/slack';
@@ -11,6 +11,11 @@ import { sleep } from './util/util';
 import * as gpctl from './util/gpctl';
 import { createHash } from "crypto";
 import { InstallMonitoringSatelliteParams, installMonitoringSatellite, observabilityStaticChecks } from './observability/monitoring-satellite';
+import { SpanStatusCode } from '@opentelemetry/api';
+import * as Tracing from './observability/tracing'
+
+// Will be set once tracing has been initialized
+let werft: Werft
 
 const readDir = util.promisify(fs.readdir)
 
@@ -19,14 +24,29 @@ const GCLOUD_SERVICE_ACCOUNT_PATH = "/mnt/secrets/gcp-sa/service-account.json";
 const context = JSON.parse(fs.readFileSync('context.json').toString());
 
 const version = parseVersion(context);
-build(context, version)
+
+
+Tracing.initialize()
+    .then(() => {
+        werft = new Werft("build")
+    })
+    .then(() => build(context, version))
+    .then(() => werft.endAllSpans())
     .catch((err) => {
+        werft.rootSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: err
+        })
+        werft.endAllSpans()
+
         if (context.Repository.ref === "refs/heads/main") {
             reportBuildFailureInSlack(context, err, () => process.exit(1));
         } else {
-            process.exit(1);
+            console.log('Error', err)
+            // Explicitly not using process.exit as we need to flush tracing, see tracing.js
+            process.exitCode = 1
         }
-    });
+    })
 
 // Werft phases
 const phases = {
@@ -50,7 +70,6 @@ export function parseVersion(context) {
 
 export async function build(context, version) {
     werft.phase('validate-changes', 'validating changes');
-
     try {
         exec(`pre-commit run --all-files --show-diff-on-failure`);
         werft.done('validate-changes');
@@ -109,7 +128,7 @@ export async function build(context, version) {
     const withPayment= "with-payment" in buildConfig;
     const withObservability = "with-observability" in buildConfig;
 
-    werft.log("job config", JSON.stringify({
+    const jobConfig = {
         buildConfig,
         version,
         mainBuild,
@@ -128,7 +147,13 @@ export async function build(context, version) {
         cleanSlateDeployment,
         installEELicense,
         withObservability,
-    }));
+    }
+    werft.log("job config", JSON.stringify(jobConfig));
+    werft.rootSpan.setAttributes(Object.fromEntries(Object.entries(jobConfig).map((kv) => {
+        const [key, value] = kv
+        return [`werft.job.config.${key}`, value]
+    })))
+    werft.rootSpan.setAttribute('werft.job.config.branch', context.Repository.ref)
 
     /**
      * Build
@@ -148,7 +173,8 @@ export async function build(context, version) {
     if (withContrib || publishRelease) {
         exec(`leeway build --docker-build-options network=host --werft=true -c remote ${dontTest ? '--dont-test' : ''} -Dversion=${version} -DimageRepoBase=${imageRepo} contrib:all`);
     }
-    exec(`leeway build --docker-build-options network=host --werft=true -c remote ${retag} --coverage-output-path=${coverageOutput} -Dversion=${version} -DremoveSources=false -DimageRepoBase=${imageRepo} -DlocalAppVersion=${localAppVersion} -DnpmPublishTrigger=${publishToNpm ? Date.now() : 'false'}`);
+    const jetbrainsArgs = `-DINTELLIJ_PLUGIN_PLATFORM_VERSION=${process.env.INTELLIJ_PLUGIN_PLATFORM_VERSION} -DINTELLIJ_BACKEND_URL=${process.env.INTELLIJ_BACKEND_URL} -DGOLAND_BACKEND_URL=${process.env.GOLAND_BACKEND_URL}`;
+    exec(`leeway build --docker-build-options network=host --werft=true -c remote ${retag} --coverage-output-path=${coverageOutput} -Dversion=${version} -DremoveSources=false -DimageRepoBase=${imageRepo} -DlocalAppVersion=${localAppVersion} ${jetbrainsArgs} -DnpmPublishTrigger=${publishToNpm ? Date.now() : 'false'}`);
     if (publishRelease) {
         try {
             werft.phase("publish", "checking version semver compliance...");
@@ -220,7 +246,6 @@ export async function build(context, version) {
     if (noPreview) {
         werft.phase("deploy", "not deploying");
         console.log("no-preview or publish-release is set");
-
         return
     }
 
@@ -450,7 +475,33 @@ export async function deployToDev(deploymentConfig: DeploymentConfig, workspaceF
         werft.log('helm', 'installing Sweeper');
         const sweeperVersion = deploymentConfig.sweeperImage.split(":")[1];
         werft.log('helm', `Sweeper version: ${sweeperVersion}`);
-        exec(`/usr/local/bin/helm3 upgrade --install --set image.version=${sweeperVersion} --set command="werft run github -a namespace=${namespace} --remote-job-path .werft/wipe-devstaging.yaml github.com/gitpod-io/gitpod:main" sweeper ../dev/charts/sweeper`);
+
+        // prepare args
+        const refsPrefix = "refs/heads/";
+        const owner: string = context.Repository.owner;
+        const repo: string = context.Repository.repo;
+        let branch: string = context.Repository.ref;
+        if (branch.startsWith(refsPrefix)) {
+            branch = branch.substring(refsPrefix.length);
+        }
+        const args = {
+            "period": "10m",
+            "timeout": "48h",   // period of inactivity that triggers a removal
+            branch,             // the branch to check for deletion
+            owner,
+            repo,
+        };
+        const argsStr = Object.entries(args).map(([k, v]) => `\"--${k}\", \"${v}\"`).join(", ");
+        const allArgsStr = `--set args="{${argsStr}}" --set githubToken.secret=github-sweeper-read-branches --set githubToken.key=token`;
+
+        // copy GH token into namespace
+        exec(`kubectl --namespace werft get secret github-sweeper-read-branches -o yaml \
+            | yq w - metadata.namespace ${namespace} \
+            | yq d - metadata.uid \
+            | yq d - metadata.resourceVersion \
+            | yq d - metadata.creationTimestamp \
+            | kubectl apply -f -`);
+        exec(`/usr/local/bin/helm3 upgrade --install --set image.version=${sweeperVersion} --set command="werft run github -a namespace=${namespace} --remote-job-path .werft/wipe-devstaging.yaml github.com/gitpod-io/gitpod:main" ${allArgsStr} sweeper ../dev/charts/sweeper`);
     }
 
     function installGitpodOnK3sWsCluster(commonFlags: string, pathToKubeConfig: string, wsProxyIP: string) {

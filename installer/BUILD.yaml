@@ -1,5 +1,5 @@
 packages:
-  - name: app
+  - name: raw-app
     type: go
     srcs:
       - go.mod
@@ -10,6 +10,7 @@ packages:
       - "pkg/components/**/*.crt"
       - "pkg/components/**/*.key"
       - "pkg/components/**/*.pem"
+      - "pkg/components/**/*.sql"
       - "third_party/**/*"
     deps:
       - components/common-go:lib
@@ -26,10 +27,23 @@ packages:
       - components/registry-facade:lib
       - components/ws-daemon-api/go:lib
       - components/ws-proxy:lib
+      - components/openvsx-proxy:lib
     env:
       - CGO_ENABLED=0
+    prep:
+      - ["sh", "-c", "ls -d third_party/charts/*/ | while read f; do echo \"cd $f && helm dep up && cd -\"; done | sh"]
     config:
       packaging: app
+  - name: app
+    type: generic
+    deps:
+      - :raw-app
+      - components:all-docker
+    argdeps:
+      - version
+    config:
+      commands:
+        - ["objcopy", "--add-section", "versionManifest=components--all-docker/versions.yaml", "installer--raw-app/installer", "installer"]
   - name: docker
     type: docker
     deps:

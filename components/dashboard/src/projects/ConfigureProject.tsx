@@ -43,8 +43,10 @@ const TASKS = {
   - init: pip install -r requirements.txt
     command: python main.py`,
     Other: `tasks:
-  - init: # TODO: install dependencies, build project
-    command: # TODO: start app`
+  - init: |
+      echo 'TODO: build project'
+    command: |
+      echo 'TODO: start app'`
 }
 
 // const IMAGES = {
@@ -61,6 +63,7 @@ export default function () {
     const location = useLocation();
     const team = getCurrentTeam(location, teams);
     const routeMatch = useRouteMatch<{ teamSlug: string, projectSlug: string }>("/(t/)?:teamSlug/:projectSlug/configure");
+    const projectSlug = routeMatch?.params.projectSlug;
     const [project, setProject] = useState<Project | undefined>();
     const [gitpodYml, setGitpodYml] = useState<string>('');
     const [dockerfile, setDockerfile] = useState<string>('');
@@ -74,7 +77,8 @@ export default function () {
     const [prebuildInstance, setPrebuildInstance] = useState<WorkspaceInstance | undefined>();
     const { isDark } = useContext(ThemeContext);
 
-    const [showAuthBanner, setShowAuthBanner] = useState<{ host: string } | undefined>(undefined);
+    const [showAuthBanner, setShowAuthBanner] = useState<{ host: string, scope?: string } | undefined>(undefined);
+    const [buttonNewWorkspaceEnabled, setButtonNewWorkspaceEnabled] = useState<boolean>(true);
 
     useEffect(() => {
         // Disable editing while loading, or when the config comes from Git.
@@ -90,7 +94,11 @@ export default function () {
             const projects = (!!team
                 ? await getGitpodService().server.getTeamProjects(team.id)
                 : await getGitpodService().server.getUserProjects());
-            const project = projects.find(p => p.name === routeMatch?.params.projectSlug);
+
+        const project = projectSlug && projects.find(
+            p => p.slug ? p.slug === projectSlug :
+            p.name === projectSlug);
+
             if (!project) {
                 setIsDetecting(false);
                 setEditorMessage(<EditorMessage type="warning" heading="Couldn't load project information." message="Please try to reload this page." />);
@@ -100,10 +108,18 @@ export default function () {
             try {
                 await detectProjectConfiguration(project);
             } catch (error) {
-                if (error && error.code === ErrorCodes.NOT_AUTHENTICATED) {
+                if (error && error.message && error.message.includes("NotFound")) {
+                    const host = new URL(project.cloneUrl).hostname;
+                    const scope: string | undefined = host === "github.com" ? "repo" : undefined;
+                    setShowAuthBanner({ host: new URL(project.cloneUrl).hostname, scope });
+                } else if (error && error.code === ErrorCodes.NOT_AUTHENTICATED) {
                     setShowAuthBanner({ host: new URL(project.cloneUrl).hostname });
                 } else {
                     console.error('Getting project configuration failed', error);
+                    setIsDetecting(false);
+                    setIsEditorDisabled(true);
+                    setEditorMessage(<EditorMessage type="warning" heading="Project type could not be detected." message="Fetching project information failed." />);
+                    setGitpodYml(TASKS.Other);
                 }
             }
         })();
@@ -136,12 +152,12 @@ export default function () {
         setGitpodYml(TASKS.Other);
     }
 
-    // @ts-ignore
-    const tryAuthorize = async (host: string, onSuccess: () => void) => {
+    const tryAuthorize = async (params: {host: string, scope?: string, onSuccess: () => void}) => {
         try {
             await openAuthorizeWindow({
-                host,
-                onSuccess,
+                host: params.host,
+                onSuccess: params.onSuccess,
+                scopes: params.scope ? [params.scope] : undefined,
                 onError: (error) => {
                     console.log(error);
                 }
@@ -151,9 +167,9 @@ export default function () {
         }
     };
 
-    const onConfirmShowAuthModal = async (host: string) => {
+    const onConfirmShowAuthModal = async (host: string, scope?: string) => {
         setShowAuthBanner(undefined);
-        await tryAuthorize(host, async () => {
+        await tryAuthorize({host, scope, onSuccess: async () => {
             // update remote session
             await getGitpodService().reconnect();
 
@@ -161,14 +177,13 @@ export default function () {
             if (project) {
                 detectProjectConfiguration(project);
             }
-        });
+        }});
     };
 
-    const buildProject = async (event: React.MouseEvent) => {
+    const buildProject = async () => {
         if (!project) {
             return;
         }
-        // (event.target as HTMLButtonElement).disabled = true;
         setEditorMessage(null);
         if (!!startPrebuildResult) {
             setStartPrebuildResult(undefined);
@@ -209,6 +224,26 @@ export default function () {
 
     useEffect(() => { document.title = 'Configure Project — Gitpod' }, []);
 
+    const onNewWorkspace = async () => {
+        setButtonNewWorkspaceEnabled(false);
+        const redirectToNewWorkspace = () => {
+            // instead of `history.push` we want forcibly to redirect here in order to avoid a following redirect from `/` -> `/projects` (cf. App.tsx)
+            const url = new URL(window.location.toString());
+            url.pathname = "/";
+            url.hash = project?.cloneUrl!;
+            window.location.href = url.toString();
+        }
+
+        if (prebuildInstance?.status.phase === "stopped" && !prebuildInstance?.status.conditions.failed && !prebuildInstance?.status.conditions.headlessTaskFailed) {
+            redirectToNewWorkspace();
+            return;
+        }
+        if (!prebuildWasTriggered) {
+            await buildProject();
+        }
+        redirectToNewWorkspace();
+    }
+
     return <>
         <Header title="Configuration" subtitle="View and edit project configuration." />
         <div className="app-container mt-8 flex space-x-4">
@@ -233,9 +268,9 @@ export default function () {
                                     No Access
                                 </div>
                                 <div className="text-center dark:text-gray-400 pb-3">
-                                    Authorize {showAuthBanner.host} <br />to access project configuration.
+                                    Authorize {showAuthBanner.host} {showAuthBanner.scope ? (<>and grant <strong>{showAuthBanner.scope}</strong> permission</>) : ""}  <br /> to access project configuration.
                                 </div>
-                                <button className={`primary mr-2 py-2`} onClick={() => onConfirmShowAuthModal(showAuthBanner.host)}>Authorize Provider</button>
+                                <button className={`primary mr-2 py-2`} onClick={() => onConfirmShowAuthModal(showAuthBanner.host, showAuthBanner.scope)}>Authorize Provider</button>
                             </div>
                         </div>
                     ) : (<>
@@ -257,14 +292,12 @@ export default function () {
                 <div className="h-20 px-6 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-600 flex space-x-2">
                     {prebuildWasTriggered && <PrebuildInstanceStatus prebuildInstance={prebuildInstance} />}
                     <div className="flex-grow" />
-                    {((!isDetecting && isEditorDisabled) || (prebuildInstance?.status.phase === "stopped" && !prebuildInstance?.status.conditions.failed && !prebuildInstance?.status.conditions.headlessTaskFailed))
-                        ? <a className="my-auto" href={`/#${project?.cloneUrl}`}><button className="secondary">New Workspace</button></a>
-                        : <button disabled={true} className="secondary">New Workspace</button>}
                     {(prebuildWasTriggered && prebuildInstance?.status.phase !== "stopped")
                         ? <button className="danger flex items-center space-x-2" disabled={prebuildWasCancelled || (prebuildInstance?.status.phase !== "initializing" && prebuildInstance?.status.phase !== "running")} onClick={cancelPrebuild}>
                             <span>Cancel Prebuild</span>
                         </button>
-                        : <button disabled={isDetecting} onClick={buildProject}>Run Prebuild</button>}
+                        : <button disabled={isDetecting} className="secondary" onClick={buildProject}>Run Prebuild</button>}
+                    <button disabled={isDetecting && buttonNewWorkspaceEnabled} onClick={onNewWorkspace}>New Workspace</button>
                 </div>
             </div>
         </div>

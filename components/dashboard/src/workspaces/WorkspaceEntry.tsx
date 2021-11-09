@@ -7,7 +7,7 @@
 import { CommitContext, Workspace, WorkspaceInfo, WorkspaceInstance, WorkspaceInstanceConditions, WorkspaceInstancePhase, ContextURL } from '@gitpod/gitpod-protocol';
 import { GitpodHostUrl } from '@gitpod/gitpod-protocol/lib/util/gitpod-host-url';
 import moment from 'moment';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import ConfirmationModal from '../components/ConfirmationModal';
 import Modal from '../components/Modal';
 import { ContextMenuEntry } from '../components/ContextMenu';
@@ -175,7 +175,7 @@ export function WorkspaceEntry({ desc, model, isAdmin, stopWorkspace }: Props) {
                         {errorMessage}
                     </div>
                     : null}
-                <input className="w-full truncate" type="text" defaultValue={workspaceDescription} ref={renameInputRef} />
+                <input autoFocus className="w-full truncate" type="text" defaultValue={workspaceDescription} ref={renameInputRef} />
                 <div className="mt-1">
                     <p className="text-gray-500">Change the description to make it easier to go back to a workspace.</p>
                     <p className="text-gray-500">Workspace URLs and endpoints will remain the same.</p>

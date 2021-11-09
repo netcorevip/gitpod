@@ -382,7 +382,7 @@ func getHistfileCommand(task *task, commands []*string, contentSource csapi.Work
 	}
 
 	histfile := storeLocation + "/cmd-" + task.Id
-	err := os.WriteFile(histfile, []byte(histfileContent), 0644)
+	err := os.WriteFile(histfile, []byte(histfileContent), 0o644)
 	if err != nil {
 		log.WithField("histfile", histfile).WithError(err).Error("cannot write histfile")
 		return ""
@@ -440,9 +440,8 @@ func (tm *tasksManager) watch(task *task, terminal *terminal.Term) {
 			// the older logs and elapsed time (`importParentLogAndGetDuration` is always safe thanks to its initial `os.Stat`).
 			_ = os.Rename(fileName, oldFileName)
 		}
-
-		var fileWriter *bufio.Writer
 		file, err := os.Create(fileName)
+		var fileWriter *bufio.Writer
 		if err != nil {
 			terminalLog.WithError(err).Error("cannot create a prebuild log file")
 			fileWriter = bufio.NewWriter(io.Discard)

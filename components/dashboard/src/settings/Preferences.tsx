@@ -5,9 +5,15 @@
  */
 
 import { useContext, useState } from "react";
+import CheckBox from "../components/CheckBox";
+import CodeText from "../components/CodeText";
+import InfoBox from "../components/InfoBox";
 import { PageWithSubMenu } from "../components/PageWithSubMenu";
+import PillLabel from "../components/PillLabel";
 import SelectableCard from "../components/SelectableCard";
 import Tooltip from "../components/Tooltip";
+import golandLogo from '../images/golandLogo.svg';
+import ideaLogo from '../images/intellijIdeaLogo.svg';
 import vscode from '../images/vscode.svg';
 import { getGitpodService } from "../service/service";
 import { ThemeContext } from "../theme-context";
@@ -19,6 +25,7 @@ type Theme = 'light' | 'dark' | 'system';
 export default function Preferences() {
     const { user } = useContext(UserContext);
     const { setIsDark } = useContext(ThemeContext);
+
     const [defaultIde, setDefaultIde] = useState<string>(user?.additionalData?.ideSettings?.defaultIde || 'code');
     const actuallySetDefaultIde = async (value: string) => {
         const additionalData = user?.additionalData || {};
@@ -28,6 +35,29 @@ export default function Preferences() {
         await getGitpodService().server.updateLoggedInUser({ additionalData });
         setDefaultIde(value);
     }
+
+    const [defaultDesktopIde, setDefaultDesktopIde] = useState<string>(user?.additionalData?.ideSettings?.defaultDesktopIde || 'intellij');
+    const actuallySetDefaultDesktopIde = async (value: string) => {
+        const additionalData = user?.additionalData || {};
+        const settings = additionalData.ideSettings || {};
+        settings.defaultDesktopIde = value;
+        additionalData.ideSettings = settings;
+        await getGitpodService().server.updateLoggedInUser({ additionalData });
+        setDefaultDesktopIde(value);
+    }
+
+    const [useDesktopIde, setUseDesktopIde] = useState<boolean>(user?.additionalData?.ideSettings?.useDesktopIde || false);
+    const actuallySetUseDesktopIde = async (value: boolean) => {
+        const additionalData = user?.additionalData || {};
+        const settings = additionalData.ideSettings || {};
+        settings.useDesktopIde = value;
+        // Make sure that default desktop IDE is set even when the user did not explicitly select one.
+        settings.defaultDesktopIde = defaultDesktopIde;
+        additionalData.ideSettings = settings;
+        await getGitpodService().server.updateLoggedInUser({ additionalData });
+        setUseDesktopIde(value);
+    }
+
     const [theme, setTheme] = useState<Theme>(localStorage.theme || 'light');
     const actuallySetTheme = (theme: Theme) => {
         if (theme === 'dark' || theme === 'system') {
@@ -55,10 +85,37 @@ export default function Preferences() {
                         <div className="flex justify-center mt-3">
                             <img className="w-16 filter-grayscale self-center" src={vscode} />
                         </div>
-                        <span className="mt-2 ml-2 self-center rounded-xl py-0.5 px-2 text-sm bg-orange-100 text-orange-700 dark:bg-orange-600 dark:text-orange-100 font-semibold">INSIDERS</span>
+                        <PillLabel type="warn" className="font-semibold mt-2 py-0.5 px-2 self-center">Insiders</PillLabel>
                     </SelectableCard>
                 </Tooltip>
             </div>
+            <div className="mt-4 space-x-4 flex">
+                <CheckBox
+                    title="Open in Desktop IDE"
+                    desc="Choose whether you would like to open your workspace in a desktop IDE instead."
+                    checked={useDesktopIde}
+                    onChange={(evt) => actuallySetUseDesktopIde(evt.target.checked)} />
+            </div>
+            {useDesktopIde && <>
+                <div className="mt-4 space-x-4 flex">
+                    <SelectableCard className="w-36 h-40" title="IntelliJ IDEA" selected={defaultDesktopIde === 'intellij'} onClick={() => actuallySetDefaultDesktopIde('intellij')}>
+                        <div className="flex justify-center mt-3">
+                            <img className="w-16 filter-grayscale self-center" src={ideaLogo} />
+                        </div>
+                        <PillLabel type="warn" className="font-semibold mt-2 py-0.5 px-2 self-center">Beta</PillLabel>
+                    </SelectableCard>
+                    <SelectableCard className="w-36 h-40" title="GoLand" selected={defaultDesktopIde === 'goland'} onClick={() => actuallySetDefaultDesktopIde('goland')}>
+                        <div className="flex justify-center mt-3">
+                            <img className="w-16 filter-grayscale self-center" src={golandLogo} />
+                        </div>
+                        <PillLabel type="warn" className="font-semibold mt-2 py-0.5 px-2 self-center">Beta</PillLabel>
+                    </SelectableCard>
+                </div>
+                <InfoBox className="my-5">While in beta, when you open a workspace using a JetBrains IDE you will need to use the following password: <CodeText>gitpod</CodeText></InfoBox>
+                <p className="text-left w-full text-gray-500">
+                    The <strong>JetBrains desktop IDEs</strong> are currently in beta. <a href="https://github.com/gitpod-io/gitpod/issues/6576" target="gitpod-feedback-issue" rel="noopener" className="gp-link">Send feedback</a> · <a href="https://www.gitpod.io/docs/integrations/jetbrains" target="_blank" rel="noopener" className="gp-link">Documentation</a>
+                </p>
+            </>}
             <h3 className="mt-12">Theme</h3>
             <p className="text-base text-gray-500">Early bird or night owl? Choose your side.</p>
             <div className="mt-4 space-x-4 flex">

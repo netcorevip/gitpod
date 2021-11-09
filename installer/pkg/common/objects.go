@@ -6,8 +6,8 @@ package common
 
 import (
 	"fmt"
+	storageconfig "github.com/gitpod-io/gitpod/content-service/api/config"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -35,10 +35,8 @@ type ServicePort struct {
 	ServicePort   int32
 }
 
-func GenerateService(component string, ports map[string]ServicePort, clusterIP *string) RenderFunc {
+func GenerateService(component string, ports map[string]ServicePort, mod ...func(spec *corev1.Service)) RenderFunc {
 	return func(cfg *RenderContext) ([]runtime.Object, error) {
-		labels := DefaultLabels(component)
-
 		var servicePorts []corev1.ServicePort
 		for name, port := range ports {
 			servicePorts = append(servicePorts, corev1.ServicePort{
@@ -49,59 +47,74 @@ func GenerateService(component string, ports map[string]ServicePort, clusterIP *
 			})
 		}
 
-		specClusterIp := "None"
-		if clusterIP != nil {
-			specClusterIp = *clusterIP
-		}
+		// kind=service is required for services. It allows Gitpod to find them
+		serviceLabels := DefaultLabels(component)
+		serviceLabels["kind"] = "service"
 
-		return []runtime.Object{&corev1.Service{
+		service := &corev1.Service{
 			TypeMeta: TypeMetaService,
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      component,
-				Namespace: cfg.Namespace,
-				Labels:    labels,
+				Name:        component,
+				Namespace:   cfg.Namespace,
+				Labels:      serviceLabels,
+				Annotations: make(map[string]string),
 			},
 			Spec: corev1.ServiceSpec{
-				Ports:     servicePorts,
-				Selector:  map[string]string{"Component": component},
-				Type:      corev1.ServiceTypeClusterIP,
-				ClusterIP: specClusterIp,
+				Ports:    servicePorts,
+				Selector: DefaultLabels(component),
+				Type:     corev1.ServiceTypeClusterIP,
 			},
-		}}, nil
+		}
+
+		for _, m := range mod {
+			// Apply any custom modifications to the spec
+			m(service)
+		}
+
+		return []runtime.Object{service}, nil
 	}
 }
 
-// GlobalObjects is any objects which are outside the scope of components, but
-// required for the application to function. Typically, these will be ClusterRole,
-// ClusterRoleBindings and similar cluster-level objects
-func GlobalObjects(ctx *RenderContext) ([]runtime.Object, error) {
-	return []runtime.Object{
-		&rbacv1.ClusterRole{
-			TypeMeta: TypeMetaClusterRole,
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-kube-rbac-proxy", ctx.Namespace),
-			},
-			Rules: []rbacv1.PolicyRule{{
-				APIGroups: []string{"authentication.k8s.io"},
-				Resources: []string{"tokenreviews"},
-				Verbs:     []string{"create"},
-			}, {
-				APIGroups: []string{"authorization.k8s.io"},
-				Resources: []string{"subjectaccessreviews"},
-				Verbs:     []string{"create"},
-			}},
-		},
-		&rbacv1.ClusterRole{
-			TypeMeta: TypeMetaClusterRole,
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-ns-psp:unprivileged", ctx.Namespace),
-			},
-			Rules: []rbacv1.PolicyRule{{
-				APIGroups:     []string{"policy"},
-				Resources:     []string{"podsecuritypolicies"},
-				Verbs:         []string{"use"},
-				ResourceNames: []string{fmt.Sprintf("%s-ns-unprivileged", ctx.Namespace)},
-			}},
+func StorageConfiguration(ctx *RenderContext) (*storageconfig.StorageConfig, error) {
+	accessKey := ctx.Values.StorageAccessKey
+	if accessKey == "" {
+		return nil, fmt.Errorf("unknown value: storage access key")
+	}
+	secretKey := ctx.Values.StorageSecretKey
+	if secretKey == "" {
+		return nil, fmt.Errorf("unknown value: storage secret key")
+	}
+
+	// todo(sje): support non-Minio storage configuration
+	// todo(sje): this has been set up with only the default values - receive configuration
+	return &storageconfig.StorageConfig{
+		Kind:      "minio",
+		BlobQuota: 0,
+		MinIOConfig: storageconfig.MinIOConfig{
+			Endpoint:        fmt.Sprintf("minio.%s.svc.cluster.local:%d", ctx.Namespace, MinioServiceAPIPort),
+			AccessKeyID:     accessKey,
+			SecretAccessKey: secretKey,
+			Secure:          false,
+			Region:          "local",
 		},
 	}, nil
+}
+
+// DockerRegistryHash creates a sample pod spec that can be converted into a hash for annotations
+func DockerRegistryHash(ctx *RenderContext) ([]runtime.Object, error) {
+	if !pointer.BoolDeref(ctx.Config.ContainerRegistry.InCluster, false) {
+		return nil, nil
+	}
+
+	return []runtime.Object{&corev1.Pod{Spec: corev1.PodSpec{
+		Containers: []corev1.Container{{
+			Env: []corev1.EnvVar{{
+				Name:  "DOCKER_REGISTRY_USERNAME",
+				Value: ctx.Values.InternalRegistryUsername,
+			}, {
+				Name:  "DOCKER_REGISTRY_PASSWORD",
+				Value: ctx.Values.InternalRegistryPassword,
+			}},
+		}},
+	}}}, nil
 }

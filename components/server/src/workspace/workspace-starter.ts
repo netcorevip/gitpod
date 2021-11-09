@@ -17,7 +17,7 @@ import { WorkspaceManagerClientProvider } from "@gitpod/ws-manager/lib/client-pr
 import { AdmissionLevel, EnvironmentVariable, GitSpec, PortSpec, PortVisibility, StartWorkspaceRequest, WorkspaceMetadata, WorkspaceType } from "@gitpod/ws-manager/lib/core_pb";
 import * as crypto from 'crypto';
 import { inject, injectable } from "inversify";
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { HostContextProvider } from "../auth/host-context-provider";
 import { ScopedResourceGuard } from '../auth/resource-access';
 import { Config } from "../config";
@@ -320,6 +320,21 @@ export class WorkspaceStarter {
                 // if the IDE choice isn't one of the preconfiured choices, we assume its the image name.
                 // For now, this feature requires special permissions.
                 configuration.ideImage = ideChoice;
+            }
+        }
+
+        const useDesktopIdeChoice = user.additionalData?.ideSettings?.useDesktopIde || false;
+        if (useDesktopIdeChoice) {
+            const desktopIdeChoice = user.additionalData?.ideSettings?.defaultDesktopIde;
+            if (!!desktopIdeChoice) {
+                const mappedImage = ideConfig.desktopIdeImageAliases[desktopIdeChoice];
+                if (!!mappedImage) {
+                    configuration.desktopIdeImage = mappedImage;
+                } else if (this.authService.hasPermission(user, "ide-settings")) {
+                    // if the IDE choice isn't one of the preconfiured choices, we assume its the image name.
+                    // For now, this feature requires special permissions.
+                    configuration.desktopIdeImage = desktopIdeChoice;
+                }
             }
         }
 
@@ -637,6 +652,13 @@ export class WorkspaceStarter {
         vsxRegistryUrl.setValue(this.config.vsxRegistryUrl);
         envvars.push(vsxRegistryUrl);
 
+        if (workspace.config.experimentalNetwork) {
+            const useNetnsVar = new EnvironmentVariable();
+            useNetnsVar.setName("WORKSPACEKIT_USE_NETNS");
+            useNetnsVar.setValue("true");
+            envvars.push(useNetnsVar);
+        }
+
         const createGitpodTokenPromise = (async () => {
             const scopes = this.createDefaultGitpodAPITokenScopes(workspace, instance);
             const token = crypto.randomBytes(30).toString('hex');
@@ -680,10 +702,7 @@ export class WorkspaceStarter {
             portIndex.add(p.port);
 
             const spec = new PortSpec();
-            let target = p.port;
-
             spec.setPort(p.port);
-            spec.setTarget(target);
             spec.setVisibility(p.visibility == 'public' ? PortVisibility.PORT_VISIBILITY_PUBLIC : PortVisibility.PORT_VISIBILITY_PRIVATE);
             return spec;
         }).filter(spec => !!spec) as PortSpec[];
@@ -725,7 +744,9 @@ export class WorkspaceStarter {
         spec.setInitializer((await initializerPromise).initializer);
         const startWorkspaceSpecIDEImage = new IDEImage();
         startWorkspaceSpecIDEImage.setWebRef(ideImage);
+        startWorkspaceSpecIDEImage.setDesktopRef(instance.configuration?.desktopIdeImage || "");
         spec.setIdeImage(startWorkspaceSpecIDEImage);
+        spec.setDeprecatedIdeImage(ideImage);
         spec.setWorkspaceImage(instance.workspaceImage);
         spec.setWorkspaceLocation(workspace.config.workspaceLocation || spec.getCheckoutLocation());
         spec.setFeatureFlagsList(this.toWorkspaceFeatureFlags(featureFlags));
@@ -754,6 +775,7 @@ export class WorkspaceStarter {
             "function:getLayout",
             "function:generateNewGitpodToken",
             "function:takeSnapshot",
+            "function:waitForSnapshot",
             "function:storeLayout",
             "function:stopWorkspace",
             "function:getToken",

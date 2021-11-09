@@ -17,12 +17,17 @@ import (
 )
 
 func ideconfigmap(ctx *common.RenderContext) ([]runtime.Object, error) {
+	stableVersion := ctx.VersionManifest.Components.Workspace.CodeImageStable.Version
+	if stableVersion == "" {
+		stableVersion = ctx.VersionManifest.Components.Workspace.CodeImage.Version
+	}
+
 	idecfg := IDEConfig{
-		IDEVersion:   ctx.VersionManifest.Components.Workspace.CodeImageStable.Version,
+		IDEVersion:   stableVersion,
 		IDEImageRepo: workspace.IDEImageRepo,
 		IDEImageAliases: map[string]string{
-			"code":        fmt.Sprintf("%s%s:%s", ctx.Config.Repository, workspace.IDEImageRepo, ctx.VersionManifest.Components.Workspace.CodeImageStable.Version),
-			"code-latest": fmt.Sprintf("%s%s:%s", ctx.Config.Repository, workspace.IDEImageRepo, ctx.VersionManifest.Components.Workspace.CodeImage.Version),
+			"code":        common.ImageName(ctx.Config.Repository, workspace.IDEImageRepo, stableVersion),
+			"code-latest": common.ImageName(ctx.Config.Repository, workspace.IDEImageRepo, ctx.VersionManifest.Components.Workspace.CodeImage.Version),
 		},
 	}
 

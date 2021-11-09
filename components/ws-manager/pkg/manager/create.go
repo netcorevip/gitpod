@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/gitpod-io/gitpod/common-go/kubernetes"
 	wsk8s "github.com/gitpod-io/gitpod/common-go/kubernetes"
 	"github.com/gitpod-io/gitpod/common-go/tracing"
 	regapi "github.com/gitpod-io/gitpod/registry-facade/api"
@@ -237,14 +238,16 @@ func (m *Manager) createDefiniteWorkspacePod(startContext *startWorkspaceContext
 	}
 
 	ideRef := startContext.Request.Spec.DeprecatedIdeImage
-	if len(startContext.Request.Spec.IdeImage.WebRef) > 0 {
+	var desktopIdeRef string
+	if startContext.Request.Spec.IdeImage != nil && len(startContext.Request.Spec.IdeImage.WebRef) > 0 {
 		ideRef = startContext.Request.Spec.IdeImage.WebRef
+		desktopIdeRef = startContext.Request.Spec.IdeImage.DesktopRef
 	}
 
 	spec := regapi.ImageSpec{
 		BaseRef:       startContext.Request.Spec.WorkspaceImage,
 		IdeRef:        ideRef,
-		DesktopIdeRef: startContext.Request.Spec.IdeImage.DesktopRef,
+		DesktopIdeRef: desktopIdeRef,
 	}
 	imageSpec, err := spec.ToBase64()
 	if err != nil {
@@ -278,19 +281,19 @@ func (m *Manager) createDefiniteWorkspacePod(startContext *startWorkspaceContext
 	}
 
 	annotations := map[string]string{
-		"prometheus.io/scrape":               "true",
-		"prometheus.io/path":                 "/metrics",
-		"prometheus.io/port":                 strconv.Itoa(int(startContext.IDEPort)),
-		workspaceIDAnnotation:                req.Id,
-		servicePrefixAnnotation:              getServicePrefix(req),
-		workspaceURLAnnotation:               startContext.WorkspaceURL,
-		workspaceInitializerAnnotation:       initializerConfig,
-		workspaceNeverReadyAnnotation:        "true",
-		workspaceAdmissionAnnotation:         admissionLevel,
-		workspaceImageSpecAnnotation:         imageSpec,
-		ownerTokenAnnotation:                 startContext.OwnerToken,
-		wsk8s.TraceIDAnnotation:              startContext.TraceID,
-		wsk8s.RequiredNodeServicesAnnotation: "ws-daemon,registry-facade",
+		"prometheus.io/scrape":                  "true",
+		"prometheus.io/path":                    "/metrics",
+		"prometheus.io/port":                    strconv.Itoa(int(startContext.IDEPort)),
+		workspaceIDAnnotation:                   req.Id,
+		servicePrefixAnnotation:                 getServicePrefix(req),
+		kubernetes.WorkspaceURLAnnotation:       startContext.WorkspaceURL,
+		workspaceInitializerAnnotation:          initializerConfig,
+		workspaceNeverReadyAnnotation:           "true",
+		kubernetes.WorkspaceAdmissionAnnotation: admissionLevel,
+		kubernetes.WorkspaceImageSpecAnnotation: imageSpec,
+		kubernetes.OwnerTokenAnnotation:         startContext.OwnerToken,
+		wsk8s.TraceIDAnnotation:                 startContext.TraceID,
+		wsk8s.RequiredNodeServicesAnnotation:    "ws-daemon,registry-facade",
 		// TODO(cw): post Kubernetes 1.19 use GA form for settings those profiles
 		"container.apparmor.security.beta.kubernetes.io/workspace": "unconfined",
 		// We're using a custom seccomp profile for user namespaces to allow clone, mount and chroot.
@@ -339,7 +342,7 @@ func (m *Manager) createDefiniteWorkspacePod(startContext *startWorkspaceContext
 						{
 							MatchExpressions: []corev1.NodeSelectorRequirement{
 								{
-									Key:      "gitpod.io/workloads/workspace/" + workloadType,
+									Key:      "gitpod.io/workload_workspace_" + workloadType,
 									Operator: corev1.NodeSelectorOpExists,
 								},
 							},
@@ -659,58 +662,6 @@ func (m *Manager) createDefaultSecurityContext() (*corev1.SecurityContext, error
 	}
 
 	return res, nil
-}
-
-func (m *Manager) createPortsService(workspaceID string, metaID string, servicePrefix string, ports []*api.PortSpec) (*corev1.Service, error) {
-	annotations := make(map[string]string)
-
-	// create service ports
-	servicePorts := make([]corev1.ServicePort, len(ports))
-	for i, p := range ports {
-		servicePorts[i] = corev1.ServicePort{
-			Port:     int32(p.Port),
-			Protocol: corev1.ProtocolTCP,
-			Name:     portSpecToName(p),
-		}
-		if p.Target != 0 {
-			servicePorts[i].TargetPort = intstr.FromInt(int(p.Target))
-		}
-
-		url, err := config.RenderWorkspacePortURL(m.Config.WorkspacePortURLTemplate, config.PortURLContext{
-			Host:          m.Config.GitpodHostURL,
-			ID:            metaID,
-			IngressPort:   fmt.Sprint(p.Port),
-			Prefix:        servicePrefix,
-			WorkspacePort: fmt.Sprint(p.Port),
-		})
-		if err != nil {
-			return nil, xerrors.Errorf("cannot render public URL for %d: %w", p.Port, err)
-		}
-		annotations[fmt.Sprintf("gitpod/port-url-%d", p.Port)] = url
-	}
-
-	serviceName := getPortsServiceName(servicePrefix)
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceName,
-			Namespace: m.Config.Namespace,
-			Labels: map[string]string{
-				"workspaceID":          workspaceID,
-				wsk8s.MetaIDLabel:      metaID,
-				markerLabel:            "true",
-				wsk8s.ServiceTypeLabel: "ports",
-			},
-			Annotations: annotations,
-		},
-		Spec: corev1.ServiceSpec{
-			Type:  corev1.ServiceTypeClusterIP,
-			Ports: servicePorts,
-			Selector: map[string]string{
-				"workspaceID": workspaceID,
-				markerLabel:   "true",
-			},
-		},
-	}, nil
 }
 
 func (m *Manager) newStartWorkspaceContext(ctx context.Context, req *api.StartWorkspaceRequest) (res *startWorkspaceContext, err error) {

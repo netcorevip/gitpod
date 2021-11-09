@@ -1,4 +1,5 @@
-import { werft, exec } from '../util/shell';
+import { exec } from '../util/shell';
+import { getGlobalWerftInstance } from '../util/werft';
 import * as shell from 'shelljs';
 import * as fs from 'fs';
 import { validateIPaddress } from '../util/util';
@@ -21,6 +22,7 @@ const sliceName = 'observability';
  * installMonitoringSatellite installs monitoring-satellite, while updating its dependencies to the latest commit in the branch it is running.
  */
 export async function installMonitoringSatellite(params: InstallMonitoringSatelliteParams) {
+    const werft = getGlobalWerftInstance()
     werft.log(sliceName, `Cloning observability repository - Branch: ${params.branch}`)
     exec(`git clone --branch ${params.branch} https://roboquat:$(cat /mnt/secrets/monitoring-satellite-preview-token/token)@github.com/gitpod-io/observability.git`, {silent: true})
     let currentCommit = exec(`git rev-parse HEAD`, {silent: true}).stdout.trim()
@@ -57,15 +59,7 @@ export async function installMonitoringSatellite(params: InstallMonitoringSatell
 }
 
 async function ensureCorrectInstallationOrder(){
-    // Adds a label to the namespace metadata.
-    // This label is used by ServiceMonitor's namespaceSelector, so Prometheus
-    // only scrape metrics from its own namespace.
-    exec('kubectl apply -f observability/monitoring-satellite/manifests/namespace.yaml', {silent: true})
-
-    exec('kubectl apply -f observability/monitoring-satellite/manifests/podsecuritypolicy-restricted.yaml', {silent: true})
-    werft.log(sliceName, 'installing prometheus-operator')
-    exec('kubectl apply -f observability/monitoring-satellite/manifests/prometheus-operator/', {silent: true})
-    exec('kubectl rollout status deployment prometheus-operator', {slice: sliceName})
+    installSetup()
 
     deployPrometheus()
     deployGrafana()
@@ -76,6 +70,8 @@ async function ensureCorrectInstallationOrder(){
 }
 
 async function deployPrometheus() {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, 'installing prometheus')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/prometheus/', {silent: true})
     // Prometheus usually takes some time to be created. We sleep to give the operator some time
@@ -84,29 +80,39 @@ async function deployPrometheus() {
 }
 
 async function deployGrafana() {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, 'installing grafana')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/grafana/', {silent: true})
     exec('kubectl rollout status deployment grafana', {slice: sliceName})
 }
 
 async function deployNodeExporter() {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, 'installing node-exporter')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/node-exporter/', {silent: true})
     exec('kubectl rollout status daemonset node-exporter', {slice: sliceName})
 }
 
 async function deployKubeStateMetrics() {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, 'installing kube-state-metrics')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/kube-state-metrics/', {silent: true})
     exec('kubectl rollout status deployment kube-state-metrics', {slice: sliceName})
 }
 
 async function deployGitpodServiceMonitors() {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, 'installing gitpod ServiceMonitor resources')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/gitpod/', {silent: true})
 }
 
 async function deployKubernetesServiceMonitors() {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, 'installing Kubernetes ServiceMonitor resources')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/kubernetes/', {silent: true})
 }
@@ -120,6 +126,8 @@ export function observabilityStaticChecks() {
 }
 
 function jsonnetFmtCheck(): boolean {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, "Checking if jsonnet compiles and is well formated")
     let success = exec('make fmt && git diff --exit-code .', {slice: sliceName}).code == 0
 
@@ -136,6 +144,8 @@ function jsonnetFmtCheck(): boolean {
 }
 
 function prometheusRulesCheck(): boolean {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, "Checking if Prometheus rules are valid.")
     let success = exec("make promtool-lint", {slice: sliceName}).code == 0
 
@@ -149,6 +159,8 @@ https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/`
 }
 
 function jsonnetUnitTests(): boolean {
+    const werft = getGlobalWerftInstance()
+
     werft.log(sliceName, "Running mixin unit tests")
     werft.log(sliceName, "Checking for hardcoded dashboard's datasources")
 
@@ -164,6 +176,8 @@ function jsonnetUnitTests(): boolean {
 function ensureIngressesReadiness(params: InstallMonitoringSatelliteParams) {
     // Read more about validating ingresses readiness
     // https://cloud.google.com/kubernetes-engine/docs/how-to/internal-load-balance-ingress?hl=it#validate
+
+    const werft = getGlobalWerftInstance()
 
     let grafanaIngressReady = false
     let prometheusIngressReady = false
@@ -184,10 +198,39 @@ function ensureIngressesReadiness(params: InstallMonitoringSatelliteParams) {
 }
 
 function ingressReady(namespace: string, name: string): boolean {
-    let ingressAddress = exec(`kubectl get ingress -n ${namespace} --no-headers ${name} | awk {'print $4'}`, {silent: true}).stdout.trim()
+    const werft = getGlobalWerftInstance()
+
+    let ingressAddress = exec(`kubectl get ingress -n ${namespace} --no-headers ${name} | awk {'print $4'}`, { silent: true }).stdout.trim()
     if (validateIPaddress(ingressAddress)) {
         return true
     }
     werft.log(sliceName, `${name} ingress not ready.`)
     return false
+}
+
+/**
+ * installSetup creates or replaces everything that is needed to run monitoring-satellite.
+ * This setup includes Custom Resource Definitions(CRDs), kubernetes operators and namespaces.
+ */
+function installSetup() {
+    const werft = getGlobalWerftInstance()
+
+    // Adds a label to the namespace metadata.
+    // This label is used by ServiceMonitor's namespaceSelector, so Prometheus
+    // only scrape metrics from its own namespace.
+    exec('kubectl apply -f observability/monitoring-satellite/manifests/namespace.yaml', {silent: true})
+    exec('kubectl apply -f observability/monitoring-satellite/manifests/podsecuritypolicy-restricted.yaml', {silent: true})
+
+    const crdExists = exec('kubectl get customresourcedefinitions.apiextensions.k8s.io alertmanagers.monitoring.coreos.com', {silent: true}).code == 0
+    if (crdExists) {
+        werft.log(sliceName, "CRDs already exists, replacing CRDs'")
+        exec('for yaml in $(find observability/monitoring-satellite/manifests/prometheus-operator/ -type f -name "*CustomResourceDefinition.yaml"); do cat $yaml | kubectl delete -f -; done', {slice: sliceName})
+    }
+    exec('find observability/monitoring-satellite/manifests/prometheus-operator/ -type f -name "*CustomResourceDefinition.yaml" | kubectl create -f -', {slice: sliceName})
+    // Making sure CRDs got installed
+    exec('until kubectl get servicemonitors.monitoring.coreos.com --all-namespaces ; do date; sleep 1; echo ""; done', {silent: true})
+
+    werft.log(sliceName, 'installing prometheus-operator')
+    exec('for yaml in $(find observability/monitoring-satellite/manifests/prometheus-operator/ -type f ! -name "*CustomResourceDefinition.yaml"); do cat $yaml | kubectl apply -f -; done', {silent: true})
+    exec('kubectl rollout status deployment prometheus-operator', {slice: sliceName})
 }

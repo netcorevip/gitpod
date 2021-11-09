@@ -12,9 +12,8 @@ packages:
       - :docker-versions
       - :publish-api
       - dev:all-app
-      - installer:app
+      - installer:docker
       - components/gitpod-protocol:all
-      - components/ide/jetbrains/backend-plugin:plugin
       - operations/observability/mixins:lint
   - name: docker-versions
     type: docker
@@ -41,6 +40,8 @@ packages:
       - components/ee/ws-scheduler:docker
       - components/gitpod-db:docker
       - components/ide/code:docker
+      - components/ide/jetbrains/image:intellij
+      - components/ide/jetbrains/image:goland
       - components/ide/theia:docker
       - components/image-builder:docker
       - components/image-builder-mk3:docker
@@ -62,8 +63,8 @@ packages:
       - dev/version-manifest:app
     config:
       commands:
-        - ["sh", "-c", "echo \"commit: ${__git_commit}\" > commit.yaml"]
-        - ["sh", "-c", "echo \"version: ${version}\" > versions.yaml"]
+        - ["sh", "-c", "echo \"commit: ${__git_commit}\" > versions.yaml"]
+        - ["sh", "-c", "echo \"version: ${version}\" >> versions.yaml"]
         - ["sh", "-c", "dev-version-manifest--app/version-manifest >> versions.yaml"]
         - ["sh", "-c", "rm -r components* dev-*"]
   - name: publish-api

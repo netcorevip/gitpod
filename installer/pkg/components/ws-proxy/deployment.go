@@ -21,6 +21,11 @@ import (
 func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 	labels := common.DefaultLabels(Component)
 
+	configHash, err := common.ObjectHash(configmap(ctx))
+	if err != nil {
+		return nil, err
+	}
+
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
 	if ctx.Config.Certificate.Name != "" {
@@ -57,9 +62,12 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 						Name:      Component,
 						Namespace: ctx.Namespace,
 						Labels:    labels,
+						Annotations: map[string]string{
+							common.AnnotationConfigChecksum: configHash,
+						},
 					},
 					Spec: corev1.PodSpec{
-						PriorityClassName:  "system-node-critical",
+						PriorityClassName:  common.SystemNodeCritical,
 						Affinity:           &corev1.Affinity{},
 						EnableServiceLinks: pointer.Bool(false),
 						ServiceAccountName: Component,
@@ -115,7 +123,7 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 								FailureThreshold:    int32(10),
 								Handler: corev1.Handler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/",
+										Path: "/readyz",
 										Port: intstr.IntOrString{IntVal: ProbePort},
 									},
 								},
@@ -128,7 +136,7 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 								TimeoutSeconds:      int32(2),
 								Handler: corev1.Handler{
 									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/",
+										Path: "/healthz",
 										Port: intstr.IntOrString{IntVal: ProbePort},
 									},
 								},

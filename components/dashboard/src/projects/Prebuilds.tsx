@@ -30,7 +30,7 @@ export default function () {
     const team = getCurrentTeam(location, teams);
 
     const match = useRouteMatch<{ team: string, resource: string }>("/(t/)?:team/:resource");
-    const projectName = match?.params?.resource;
+    const projectSlug = match?.params?.resource;
 
     const [project, setProject] = useState<Project | undefined>();
 
@@ -70,7 +70,10 @@ export default function () {
                 ? await getGitpodService().server.getTeamProjects(team.id)
                 : await getGitpodService().server.getUserProjects());
 
-            const newProject = projectName && projects.find(p => p.name === projectName);
+        const newProject = projectSlug && projects.find(
+            p => p.slug ? p.slug === projectSlug :
+            p.name === projectSlug);
+
             if (newProject) {
                 setProject(newProject);
             }
@@ -180,7 +183,7 @@ export default function () {
                 </Item>
                 {prebuilds.filter(filter).sort(prebuildSorter).map((p, index) => <Item key={`prebuild-${p.info.id}`} className="grid grid-cols-3">
                     <ItemField className="flex items-center">
-                        <Link to={`/${!!team ? 't/'+team.slug : 'projects'}/${projectName}/${p.info.id}`} className="cursor-pointer">
+                        <Link to={`/${!!team ? 't/'+team.slug : 'projects'}/${projectSlug}/${p.info.id}`} className="cursor-pointer">
                             <div className="text-base text-gray-900 dark:text-gray-50 font-medium uppercase mb-1">
                                 <div className="inline-block align-text-bottom mr-2 w-4 h-4">{prebuildStatusIcon(p)}</div>
                                 {prebuildStatusLabel(p)}
@@ -251,6 +254,9 @@ export function PrebuildInstanceStatus(props: { prebuildInstance?: WorkspaceInst
     let details = <></>;
     switch (props.prebuildInstance?.status.phase) {
         case undefined: // Fall through
+        case 'preparing': // Fall through
+        case 'pending': // Fall through
+        case 'creating': // Fall through
         case 'unknown':
             status = <div className="flex space-x-1 items-center text-yellow-600">
                 <img className="h-4 w-4" src={StatusPaused} />
@@ -258,12 +264,9 @@ export function PrebuildInstanceStatus(props: { prebuildInstance?: WorkspaceInst
                 </div>;
             details = <div className="flex space-x-1 items-center text-gray-400">
                 <img className="h-4 w-4 animate-spin" src={Spinner} />
-                <span>Prebuild in progress ...</span>
+                <span>Preparing prebuild ...</span>
                 </div>;
             break;
-        case 'preparing': // Fall through
-        case 'pending': // Fall through
-        case 'creating': // Fall through
         case 'initializing': // Fall  through
         case 'running': // Fall through
         case 'interrupted': // Fall through

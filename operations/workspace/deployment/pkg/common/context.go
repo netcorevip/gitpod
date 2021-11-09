@@ -4,7 +4,12 @@
 
 package common
 
-import "k8s.io/client-go/kubernetes"
+// Context is a wrapper over other contexts
+type Context struct {
+	Project   *ProjectContext
+	Gitpod    *GitpodContext
+	Overrides *Overrides
+}
 
 // ProjectContext is a wrapper which contains information required to communicate to the
 // right GCP project with correct inputs
@@ -16,8 +21,12 @@ type ProjectContext struct {
 	Bucket        string `yaml:"bucket"`
 }
 
-// ClusterContext contains the context to access the cluster
-type ClusterContext struct {
-	KubeconfigPath string
-	Client         *kubernetes.Clientset
+// GitpodContext is a wraper over data that is required
+// to install gitpod on a cluster
+type GitpodContext struct {
+	// VersionsManifestFilePath is the path of versions manifests files
+	VersionsManifestFilePath string
+	// ValuesFiles an array of values files that would be used to set
+	// configuration of gitpod
+	ValuesFiles []string
 }

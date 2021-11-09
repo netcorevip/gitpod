@@ -7,7 +7,7 @@ package dockerregistry
 import (
 	"encoding/base64"
 	"encoding/json"
-
+	"fmt"
 	"github.com/gitpod-io/gitpod/installer/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,14 +21,14 @@ func secret(ctx *common.RenderContext) ([]runtime.Object, error) {
 		return nil, nil
 	}
 
-	user, err := common.RandomString(20)
-	if err != nil {
-		return nil, err
+	user := ctx.Values.InternalRegistryUsername
+	if user == "" {
+		return nil, fmt.Errorf("unknown value: internal registry username")
 	}
 
-	password, err := common.RandomString(20)
-	if err != nil {
-		return nil, err
+	password := ctx.Values.InternalRegistryPassword
+	if password == "" {
+		return nil, fmt.Errorf("unknown value: internal registry password")
 	}
 
 	// todo(sje): handle if bypassing registry with proxy
@@ -48,7 +48,7 @@ func secret(ctx *common.RenderContext) ([]runtime.Object, error) {
 	return []runtime.Object{&corev1.Secret{
 		TypeMeta: common.TypeMetaSecret,
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      BuiltInRegistrySecret,
+			Name:      BuiltInRegistryAuth,
 			Namespace: ctx.Namespace,
 			Labels:    common.DefaultLabels(Component),
 		},

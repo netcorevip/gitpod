@@ -24,6 +24,11 @@ import (
 func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 	labels := common.DefaultLabels(Component)
 
+	configHash, err := common.ObjectHash(configmap(ctx))
+	if err != nil {
+		return nil, err
+	}
+
 	// Convert to a JSON string
 	fc, err := json.MarshalIndent(wsmanagerbridge.WSManagerList(), "", " ")
 	if err != nil {
@@ -49,10 +54,13 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 						Name:      Component,
 						Namespace: ctx.Namespace,
 						Labels:    labels,
+						Annotations: map[string]string{
+							common.AnnotationConfigChecksum: configHash,
+						},
 					},
 					Spec: corev1.PodSpec{
 						Affinity:           &corev1.Affinity{},
-						PriorityClassName:  "system-node-critical",
+						PriorityClassName:  common.SystemNodeCritical,
 						ServiceAccountName: Component,
 						EnableServiceLinks: pointer.Bool(false),
 						// todo(sje): conditionally add github-app-cert-secret in
@@ -61,7 +69,7 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: Component},
+									LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-config", Component)},
 								},
 							},
 						}, {
@@ -104,6 +112,7 @@ func deployment(ctx *common.RenderContext) ([]runtime.Object, error) {
 							// todo(sje): do we need to cater for serverContainer.env from values.yaml?
 							Env: common.MergeEnv(
 								common.DefaultEnv(&ctx.Config),
+								common.DatabaseEnv(&ctx.Config),
 								common.TracingEnv(&ctx.Config),
 								common.AnalyticsEnv(&ctx.Config),
 								common.MessageBusEnv(&ctx.Config),

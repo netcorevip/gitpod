@@ -4,7 +4,7 @@
 
 FROM gitpod/workspace-full-vnc:latest
 
-ENV TRIGGER_REBUILD 14
+ENV TRIGGER_REBUILD 16
 ENV WORKSPACE_KERNEL 5.4.0-1051-gke
 
 USER root
@@ -27,7 +27,7 @@ RUN curl -fsSL https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 > $CLO
 
 ### Helm3 ###
 RUN mkdir -p /tmp/helm/ \
-    && curl -fsSL https://get.helm.sh/helm-v3.6.0-linux-amd64.tar.gz | tar -xzvC /tmp/helm/ --strip-components=1 \
+    && curl -fsSL https://get.helm.sh/helm-v3.7.1-linux-amd64.tar.gz | tar -xzvC /tmp/helm/ --strip-components=1 \
     && cp /tmp/helm/helm /usr/local/bin/helm \
     && cp /tmp/helm/helm /usr/local/bin/helm3 \
     && rm -rf /tmp/helm/ \
@@ -68,7 +68,7 @@ RUN cd /usr/bin && curl -L https://github.com/praetorian-inc/gokart/releases/dow
 
 # leeway
 ENV LEEWAY_NESTED_WORKSPACE=true
-RUN cd /usr/bin && curl -fsSL https://github.com/gitpod-io/leeway/releases/download/v0.2.7/leeway_0.2.7_Linux_x86_64.tar.gz | tar xz
+RUN cd /usr/bin && curl -fsSL https://github.com/gitpod-io/leeway/releases/download/v0.2.8/leeway_0.2.8_Linux_x86_64.tar.gz | tar xz
 
 # dazzle
 RUN cd /usr/bin && curl -fsSL https://github.com/32leaves/dazzle/releases/download/v0.0.3/dazzle_0.0.3_Linux_x86_64.tar.gz | tar xz
@@ -88,7 +88,7 @@ RUN cd /usr/bin && curl -fsSL https://github.com/c4milo/github-release/releases/
 ### Protobuf
 RUN set -ex \
     && tmpdir=$(mktemp -d) \
-    && curl -fsSL -o $tmpdir/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protoc-3.17.3-linux-x86_64.zip \
+    && curl -fsSL -o $tmpdir/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.19.1/protoc-3.19.1-linux-x86_64.zip \
     && mkdir -p /usr/lib/protoc && cd /usr/lib/protoc && unzip $tmpdir/protoc.zip \
     && chmod -R o+r+x /usr/lib/protoc/include \
     && chmod -R +x /usr/lib/protoc/bin \
@@ -120,7 +120,7 @@ RUN install-packages gperf \
 USER gitpod
 
 # Fix node version we develop against
-ARG GITPOD_NODE_VERSION=12.22.4
+ARG GITPOD_NODE_VERSION=16.13.0
 RUN bash -c ". .nvm/nvm.sh \
     && nvm install $GITPOD_NODE_VERSION \
     && npm install -g typescript yarn"

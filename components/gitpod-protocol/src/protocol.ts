@@ -114,6 +114,8 @@ export interface EmailNotificationSettings {
 
 export type IDESettings = {
     defaultIde?: string
+    useDesktopIde?: boolean
+    defaultDesktopIde?: string
 }
 
 export interface UserPlatform {
@@ -135,14 +137,6 @@ export interface UserPlatform {
 }
 
 export interface UserFeatureSettings {
-    /**
-     * This field is used as marker to grant users a free trial for using private repositories,
-     * independent of any subscription or Chargebee.
-     *  - it is set when the user uses their first private repo
-     *  - whether the trial is expired or not is juged by the UserService
-     */
-    privateRepoTrialStartDate?: string;
-
     /**
      * Permanent feature flags are added to each and every workspace instance
      * this user starts.
@@ -378,10 +372,15 @@ export interface PendingGithubEvent {
 export interface Snapshot {
     id: string;
     creationTime: string;
+    availableTime?: string;
     originalWorkspaceId: string;
     bucketId: string;
     layoutData?: string;
+    state: SnapshotState;
+    message?: string;
 }
+
+export type SnapshotState = 'pending' | 'available' | 'error';
 
 export interface LayoutData {
     workspaceId: string;
@@ -558,6 +557,9 @@ export interface WorkspaceConfig {
     gitConfig?: { [config: string]: string };
     github?: GithubAppConfig;
     vscode?: VSCodeConfig;
+
+    /** tailscale demo */
+    experimentalNetwork?: boolean;
 
     /**
      * Where the config object originates from.

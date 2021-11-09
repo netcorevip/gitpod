@@ -10,10 +10,11 @@ import (
 	"os"
 	"testing"
 
-	gitpod "github.com/gitpod-io/gitpod/gitpod-protocol"
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
+	gitpod "github.com/gitpod-io/gitpod/gitpod-protocol"
 )
 
 var log = logrus.NewEntry(logrus.StandardLogger())
@@ -27,7 +28,7 @@ func TestGitpodConfig(t *testing.T) {
 		{
 			Desc: "parsing",
 			Content: `
-image: eu.gcr.io/gitpod-core-dev/dev/dev-environment:cw-gokart.18
+image: eu.gcr.io/gitpod-core-dev/dev/dev-environment:gpl-dev-reliable-wipe.19
 workspaceLocation: gitpod/gitpod-ws.code-workspace
 checkoutLocation: gitpod
 ports:
@@ -46,7 +47,7 @@ vscode:
     - hangxingliu.vscode-nginx-conf-hint@0.1.0:UATTe2sTFfCYWQ3jw4IRsw==
     - zxh404.vscode-proto3@0.4.2:ZnPmyF/Pb8AIWeCqc83gPw==`,
 			Expectation: &gitpod.GitpodConfig{
-				Image:             "eu.gcr.io/gitpod-core-dev/dev/dev-environment:cw-gokart.18",
+				Image:             "eu.gcr.io/gitpod-core-dev/dev/dev-environment:gpl-dev-reliable-wipe.19",
 				WorkspaceLocation: "gitpod/gitpod-ws.code-workspace",
 				CheckoutLocation:  "gitpod",
 				Ports: []*gitpod.PortsItems{
@@ -116,7 +117,7 @@ vscode:
 					t.Fatal(err)
 				}
 
-				err = os.WriteFile(configService.location, []byte(test.Content), 0600)
+				err = os.WriteFile(configService.location, []byte(test.Content), 0o600)
 				if err != nil {
 					t.Fatal(err)
 				}

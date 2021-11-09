@@ -11,6 +11,7 @@ var Objects = common.CompositeRenderFunc(
 	deployment,
 	networkpolicy,
 	rolebinding,
+	role,
 	common.DefaultServiceAccount(Component),
 	common.GenerateService(Component, map[string]common.ServicePort{
 		HTTPProxyPortName: {
@@ -25,5 +26,5 @@ var Objects = common.CompositeRenderFunc(
 			ContainerPort: MetricsPort,
 			ServicePort:   MetricsPort,
 		},
-	}, nil),
+	}),
 )

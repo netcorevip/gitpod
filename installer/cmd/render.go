@@ -14,7 +14,6 @@ import (
 	"github.com/gitpod-io/gitpod/installer/pkg/components"
 	"github.com/gitpod-io/gitpod/installer/pkg/config"
 	configv1 "github.com/gitpod-io/gitpod/installer/pkg/config/v1"
-	"github.com/gitpod-io/gitpod/installer/pkg/config/versions"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 )
@@ -24,9 +23,6 @@ var renderOpts struct {
 	Namespace              string
 	ValidateConfigDisabled bool
 }
-
-//go:embed versions.yaml
-var versionManifest []byte
 
 // renderCmd represents the render command
 var renderCmd = &cobra.Command{
@@ -46,22 +42,31 @@ A config file is required which can be generated with the init command.`,
 			return err
 		}
 
-		var versionMF versions.Manifest
-		err = yaml.Unmarshal(versionManifest, &versionMF)
+		versionMF, err := getVersionManifest()
 		if err != nil {
 			return err
 		}
 
 		if !renderOpts.ValidateConfigDisabled {
-			if err = runConfigValidation(cfgVersion, cfg); err != nil {
+			apiVersion, err := config.LoadConfigVersion(cfgVersion)
+			if err != nil {
 				return err
+			}
+			res, err := config.Validate(apiVersion, cfg)
+			if err != nil {
+				return err
+			}
+
+			if !res.Valid {
+				res.Marshal(os.Stderr)
+				fmt.Fprintln(os.Stderr, "configuration is invalid")
+				os.Exit(1)
 			}
 		}
 
-		ctx := &common.RenderContext{
-			Config:          *cfg,
-			VersionManifest: versionMF,
-			Namespace:       renderOpts.Namespace,
+		ctx, err := common.NewRenderContext(*cfg, *versionMF, renderOpts.Namespace)
+		if err != nil {
+			return err
 		}
 
 		var renderable common.RenderFunc
@@ -80,27 +85,48 @@ A config file is required which can be generated with the init command.`,
 			return fmt.Errorf("unsupported installation kind: %s", cfg.Kind)
 		}
 
-		objs, err := renderable(ctx)
+		objs, err := common.CompositeRenderFunc(components.CommonObjects, renderable)(ctx)
 		if err != nil {
 			return err
 		}
 
-		charts, err := helmCharts(ctx)
-		if err != nil {
-			return err
-		}
-
+		k8s := make([]string, 0)
 		for _, o := range objs {
 			fc, err := yaml.Marshal(o)
 			if err != nil {
 				return err
 			}
 
-			fmt.Printf("---\n%s\n", string(fc))
+			k8s = append(k8s, fmt.Sprintf("---\n%s\n", string(fc)))
 		}
 
-		for _, c := range charts {
-			fmt.Printf("---\n%s\n", c)
+		charts, err := common.CompositeHelmFunc(components.CommonHelmDependencies, helmCharts)(ctx)
+		if err != nil {
+			return err
+		}
+		k8s = append(k8s, charts...)
+
+		// convert everything to individual objects
+		runtimeObjs, err := common.YamlToRuntimeObject(k8s)
+		if err != nil {
+			return err
+		}
+
+		// generate a config map with every component installed
+		runtimeObjsAndConfig, err := common.GenerateInstallationConfigMap(ctx, runtimeObjs)
+		if err != nil {
+			return err
+		}
+
+		// sort the objects and return the plain YAML
+		sortedObjs, err := common.DependencySortingRenderFunc(runtimeObjsAndConfig)
+		if err != nil {
+			return err
+		}
+
+		// output the YAML to stdout
+		for _, c := range sortedObjs {
+			fmt.Printf("---\n# %s/%s %s\n%s\n", c.TypeMeta.APIVersion, c.TypeMeta.Kind, c.Metadata.Name, c.Content)
 		}
 
 		return nil

@@ -12,7 +12,7 @@ import { log } from "@gitpod/gitpod-protocol/lib/util/logging";
 import { Config } from "../config";
 import { AuthProviderParams, AuthUser } from "../auth/auth-provider";
 import { BlockedUserFilter } from "../auth/blocked-user-filter";
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { TermsProvider } from "../terms/terms-provider";
 import { TokenService } from "./token-service";
 import { EmailAddressAlreadyTakenException, SelectAccountException } from "../auth/errors";
@@ -335,8 +335,10 @@ export class UserService {
         /*
          * /!\ the given email address is used in another user account.
          */
+        const authProviderId = existingUser.identities.find(i => i.primaryEmail === email)?.authProviderId;
+        const host = this.hostContextProvider.getAll().find(c => c.authProvider.authProviderId === authProviderId)?.authProvider?.info?.host || "unknown";
 
-        throw EmailAddressAlreadyTakenException.create(`Email address is already in use.`);
+        throw EmailAddressAlreadyTakenException.create(`Email address is already in use.`, { host });
     }
 
 }

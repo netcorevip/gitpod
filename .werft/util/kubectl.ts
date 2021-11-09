@@ -1,5 +1,6 @@
 import { ShellString } from 'shelljs';
-import { exec, ExecOptions, werft } from './shell';
+import { exec, ExecOptions } from './shell';
+import { getGlobalWerftInstance } from './werft';
 
 
 export const IS_PREVIEW_APP_LABEL: string = "isPreviewApp";
@@ -39,7 +40,7 @@ function uninstallHelm(pathToKubeConfig: string, installationName: string, names
         return;
     }
 
-    exec(`export KUBECONFIG=${pathToKubeConfig} && helm --namespace ${namespace} delete ${installationName}`, shellOpts);
+    exec(`export KUBECONFIG=${pathToKubeConfig} && helm --namespace ${namespace} delete ${installationName} --wait`, shellOpts);
 }
 
 function deleteAllWorkspaces(pathToKubeConfig: string, namespace: string, shellOpts: ExecOptions) {
@@ -68,6 +69,8 @@ function deleteAllWorkspaces(pathToKubeConfig: string, namespace: string, shellO
 
 // deleteAllUnnamespacedObjects deletes all unnamespaced objects for the given namespace
 async function deleteAllUnnamespacedObjects(pathToKubeConfig: string, namespace: string, shellOpts: ExecOptions): Promise<void> {
+    const werft = getGlobalWerftInstance()
+
     const slice = shellOpts.slice || "deleteobjs";
 
     const promisedDeletes: Promise<any>[] = [];
@@ -150,6 +153,8 @@ export interface PortRange {
 }
 
 export function findFreeHostPorts(pathToKubeConfig: string, ranges: PortRange[], slice: string): number[] {
+    const werft = getGlobalWerftInstance()
+
     const hostPorts: number[] = exec(`export KUBECONFIG=${pathToKubeConfig} && kubectl get pods --all-namespaces -o yaml | yq r - 'items.*.spec.containers.*.ports.*.hostPort'`, { silent: true })
         .stdout
         .split("\n")

@@ -109,6 +109,7 @@ function getConfig(config: RateLimiterConfig): RateLimiterConfig {
         "sendFeedback": { group: "default", points: 1 },
         "registerGithubApp": { group: "default", points: 1 },
         "takeSnapshot": { group: "default", points: 1 },
+        "waitForSnapshot": { group: "default", points: 1 },
         "getSnapshots": { group: "default", points: 1 },
         "storeLayout": { group: "default", points: 1 },
         "getLayout": { group: "default", points: 1 },
@@ -150,12 +151,10 @@ function getConfig(config: RateLimiterConfig): RateLimiterConfig {
         "getAvailableCoupons":  { group: "default", points: 1 },
         "getChargebeeSiteId":  { group: "default", points: 1 },
         "getGithubUpgradeUrls":  { group: "default", points: 1 },
-        "getPrivateRepoTrialEndDate":  { group: "default", points: 1 },
         "getRemainingUsageHours":  { group: "default", points: 1 },
         "getShowPaymentUI":  { group: "default", points: 1 },
         "isChargebeeCustomer":  { group: "default", points: 1 },
         "isStudent":  { group: "default", points: 1 },
-        "mayAccessPrivateRepo":  { group: "default", points: 1 },
         "subscriptionCancel":  { group: "default", points: 1 },
         "subscriptionCancelDowngrade":  { group: "default", points: 1 },
         "subscriptionDowngradeTo":  { group: "default", points: 1 },
@@ -169,7 +168,8 @@ function getConfig(config: RateLimiterConfig): RateLimiterConfig {
         "tsReactivateSlot":  { group: "default", points: 1 },
         "tsReassignSlot":  { group: "default", points: 1 },
         "trackEvent":  { group: "default", points: 1 },
-        "trackLocation": { group: "default", points: 1}
+        "trackLocation": { group: "default", points: 1},
+        "identifyUser": { group: "default", points: 1}
     };
 
     return {

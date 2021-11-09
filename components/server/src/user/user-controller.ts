@@ -11,6 +11,7 @@ import * as express from 'express';
 import { Authenticator } from "../auth/authenticator";
 import { Config } from '../config';
 import { log, LogContext } from '@gitpod/gitpod-protocol/lib/util/logging';
+import { SafePromise } from '@gitpod/gitpod-protocol/lib/util/safe-promise';
 import { AuthorizationService } from "./authorization-service";
 import { Permission } from "@gitpod/gitpod-protocol/lib/permission";
 import { UserService } from "./user-service";
@@ -26,9 +27,10 @@ import { IAnalyticsWriter } from "@gitpod/gitpod-protocol/lib/analytics";
 import { TosCookie } from "./tos-cookie";
 import { TosFlow } from "../terms/tos-flow";
 import { increaseLoginCounter } from '../../src/prometheus-metrics';
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { ScopedResourceGuard } from "../auth/resource-access";
 import { OneTimeSecretServer } from '../one-time-secret-server';
+import { trackSignup } from '../analytics';
 
 @injectable()
 export class UserController {
@@ -78,7 +80,7 @@ export class UserController {
 
             // Make sure, the session is stored before we initialize the OAuth flow
             try {
-                await saveSession(req);
+                await saveSession(req.session);
             } catch (error) {
                 increaseLoginCounter("failed", "unknown")
                 log.error(`Login failed due to session save error; redirecting to /sorry`, { req, error, clientInfo });
@@ -225,6 +227,7 @@ export class UserController {
                 }
 
                 const rt = req.query.returnTo;
+                // @ts-ignore Type 'ParsedQs' is not assignable
                 if (!rt || !rt.startsWith("localhost:")) {
                     log.error(`auth/local-app: invalid returnTo URL: "${rt}"`)
                     res.sendStatus(400);
@@ -492,21 +495,9 @@ export class UserController {
 
         await this.userService.updateUserEnvVarsOnLogin(user, envVars);
         await this.userService.acceptCurrentTerms(user);
-        this.analytics.track({
-            userId: user.id,
-            event: "signup",
-            properties: {
-                "auth_provider": user.identities[0].authProviderId,
-                "email": User.getPrimaryEmail(user),
-                "name": user.identities[0].authName,
-                "full_name": user.fullName,
-                "created_at": user.creationDate,
-                "unsubscribed_onboarding": !user.additionalData?.emailNotificationSettings?.allowsOnboardingMail,
-                "unsubscribed_changelog": !user.additionalData?.emailNotificationSettings?.allowsChangelogMail,
-                "unsubscribed_devx": !user.additionalData?.emailNotificationSettings?.allowsDevXMail,
-                "blocked": user.blocked
-            }
-        });
+
+        /* no await */ SafePromise.catchAndLog(trackSignup(user, req, this.analytics), { userId: user.id });
+
         await this.loginCompletionHandler.complete(req, res, { user, returnToUrl: returnTo, authHost: host });
     }
 
@@ -589,6 +580,7 @@ export class UserController {
     }
 
     protected getSafeReturnToParam(req: express.Request) {
+        // @ts-ignore Type 'ParsedQs' is not assignable
         const returnToURL: string | undefined = req.query.redirect || req.query.returnTo;
         if (!returnToURL) {
             log.debug({ sessionId: req.sessionID }, "Empty redirect URL");

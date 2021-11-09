@@ -28,7 +28,7 @@ import { Emitter } from './util/event';
 import { AccountStatement, CreditAlert } from './accounting-protocol';
 import { GithubUpgradeURL, PlanCoupon } from './payment-protocol';
 import { TeamSubscription, TeamSubscriptionSlot, TeamSubscriptionSlotResolved } from './team-subscription-protocol';
-import { RemotePageMessage, RemoteTrackMessage } from './analytics';
+import { RemotePageMessage, RemoteTrackMessage, RemoteIdentifyMessage } from './analytics';
 
 export interface GitpodClient {
     onInstanceUpdate(instance: WorkspaceInstance): void;
@@ -153,10 +153,15 @@ export interface GitpodServer extends JsonRpcServer<GitpodClient>, AdminServer, 
     registerGithubApp(installationId: string): Promise<void>;
 
     /**
-     * Stores a new snapshot for the given workspace and bucketId
+     * Stores a new snapshot for the given workspace and bucketId. Returns _before_ the actual snapshot is done. To wait for that, use `waitForSnapshot`.
      * @return the snapshot id
      */
     takeSnapshot(options: GitpodServer.TakeSnapshotOptions): Promise<string>;
+    /**
+     *
+     * @param snapshotId
+     */
+    waitForSnapshot(snapshotId: string): Promise<void>;
 
     /**
      * Returns the list of snapshots that exist for a workspace.
@@ -188,8 +193,6 @@ export interface GitpodServer extends JsonRpcServer<GitpodClient>, AdminServer, 
      * gitpod.io concerns
      */
     isStudent(): Promise<boolean>;
-    getPrivateRepoTrialEndDate(): Promise<string | undefined>;
-
     /**
      *
      */
@@ -207,7 +210,6 @@ export interface GitpodServer extends JsonRpcServer<GitpodClient>, AdminServer, 
 
     getShowPaymentUI(): Promise<boolean>;
     isChargebeeCustomer(): Promise<boolean>;
-    mayAccessPrivateRepo(): Promise<boolean>;
 
     subscriptionUpgradeTo(subscriptionId: string, chargebeePlanId: string): Promise<void>;
     subscriptionDowngradeTo(subscriptionId: string, chargebeePlanId: string): Promise<void>;
@@ -230,10 +232,12 @@ export interface GitpodServer extends JsonRpcServer<GitpodClient>, AdminServer, 
      */
     trackEvent(event: RemoteTrackMessage): Promise<void>;
     trackLocation(event: RemotePageMessage): Promise<void>;
+    identifyUser(event: RemoteIdentifyMessage): Promise<void>;
 }
 
 export interface CreateProjectParams {
     name: string;
+    slug?: string;
     account: string;
     provider: string;
     cloneUrl: string;
@@ -255,6 +259,7 @@ export interface GetProviderRepositoriesParams {
 }
 export interface ProviderRepository {
     name: string;
+    path?: string;
     account: string;
     accountAvatarUrl: string;
     cloneUrl: string;
@@ -266,10 +271,10 @@ export interface ProviderRepository {
 }
 
 export interface ClientHeaderFields{
-    ip?:string;
-    userAgent?:string;
-    dnt?:number;
-    clientRegion?:string;
+    ip?: string;
+    userAgent?: string;
+    dnt?: string;
+    clientRegion?: string;
 }
 
 export const WorkspaceTimeoutValues = ["30m", "60m", "180m"] as const;
@@ -332,6 +337,8 @@ export namespace GitpodServer {
     export interface TakeSnapshotOptions {
         workspaceId: string;
         layoutData?: string;
+        /* this is here to enable backwards-compatibility and untangling rollout between workspace, IDE and meta */
+        dontWait?: boolean;
     }
     export interface GetUserStorageResourceOptions {
         readonly uri: string;

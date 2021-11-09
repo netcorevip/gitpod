@@ -7,6 +7,7 @@ package config
 import (
 	"github.com/gitpod-io/gitpod/installer/pkg/config"
 	"github.com/gitpod-io/gitpod/ws-daemon/pkg/resources"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/pointer"
@@ -18,7 +19,15 @@ func init() {
 
 type version struct{}
 
-func (v version) Factory() interface{} { return &Config{} }
+func (v version) Factory() interface{} {
+	return &Config{
+		AuthProviders: []AuthProviderConfigs{},
+		BlockNewUsers: BlockNewUsers{
+			Enabled:  false,
+			Passlist: []string{},
+		},
+	}
+}
 func (v version) Defaults(in interface{}) error {
 	cfg, ok := in.(*Config)
 	if !ok {
@@ -31,7 +40,7 @@ func (v version) Defaults(in interface{}) error {
 	cfg.Observability = Observability{
 		LogLevel: LogLevelInfo,
 	}
-	cfg.Certificate.Kind = CertificateRefSecret
+	cfg.Certificate.Kind = ObjectRefSecret
 	cfg.Certificate.Name = "https-certificates"
 	cfg.Database.InCluster = pointer.Bool(true)
 	cfg.ObjectStorage.InCluster = pointer.Bool(true)
@@ -42,13 +51,14 @@ func (v version) Defaults(in interface{}) error {
 		corev1.ResourceMemory: resource.MustParse("2Gi"),
 	}
 	cfg.Workspace.Runtime.FSShiftMethod = FSShiftFuseFS
+	cfg.Workspace.Runtime.ContainerDSocket = "/run/containerd/containerd.sock"
 	cfg.Workspace.Runtime.ContainerDRuntimeDir = "/run/containerd/io.containerd.runtime.v2.task/k8s.io"
 
 	return nil
 }
 
 type Config struct {
-	Kind       InstallationKind `json:"kind" validate:"required,installationKind"`
+	Kind       InstallationKind `json:"kind" validate:"required,installation_kind"`
 	Domain     string           `json:"domain" validate:"required,fqdn"`
 	Metadata   Metadata         `json:"metadata"`
 	Repository string           `json:"repository" validate:"required,ascii"`
@@ -70,16 +80,16 @@ type Config struct {
 
 	Workspace Workspace `json:"workspace" validate:"required"`
 
-	AuthProviders []AuthProviderConfigs `json:"authProviders,omitempty"`
+	AuthProviders []AuthProviderConfigs `json:"authProviders"`
 	BlockNewUsers BlockNewUsers         `json:"blockNewUsers"`
 }
 
 type Metadata struct {
-	Region string `json:"region"`
+	Region string `json:"region" validate:"required"`
 }
 
 type Observability struct {
-	LogLevel LogLevel `json:"logLevel" validate:"required,logLevel"`
+	LogLevel LogLevel `json:"logLevel" validate:"required,log_level"`
 	Tracing  *Tracing `json:"tracing,omitempty"`
 }
 
@@ -95,16 +105,17 @@ type Tracing struct {
 
 type Database struct {
 	InCluster *bool             `json:"inCluster,omitempty"`
-	RDS       *DatabaseRDS      `json:"rds,omitempty"`
+	External  *DatabaseExternal `json:"external,omitempty"`
 	CloudSQL  *DatabaseCloudSQL `json:"cloudSQL,omitempty"`
 }
 
-type DatabaseRDS struct {
+type DatabaseExternal struct {
 	Certificate ObjectRef `json:"certificate"`
 }
 
 type DatabaseCloudSQL struct {
-	Certificate ObjectRef `json:"certificate"`
+	ServiceAccount ObjectRef `json:"serviceAccount"`
+	Instance       string    `json:"instance" validate:"required"`
 }
 
 type ObjectStorage struct {
@@ -118,7 +129,8 @@ type ObjectStorageS3 struct {
 }
 
 type ObjectStorageCloudStorage struct {
-	Certificate ObjectRef `json:"certificate"`
+	ServiceAccount ObjectRef `json:"serviceAccount" validate:"required"`
+	Project        string    `json:"project" validate:"required"`
 }
 
 type InstallationKind string
@@ -130,14 +142,14 @@ const (
 )
 
 type ObjectRef struct {
-	Kind CertificateRefKind `json:"kind" validate:"required,certificateKind"`
-	Name string             `json:"name" validate:"required"`
+	Kind ObjectRefKind `json:"kind" validate:"required,objectref_kind"`
+	Name string        `json:"name" validate:"required"`
 }
 
-type CertificateRefKind string
+type ObjectRefKind string
 
 const (
-	CertificateRefSecret CertificateRefKind = "secret"
+	ObjectRefSecret ObjectRefKind = "secret"
 )
 
 type ContainerRegistry struct {
@@ -182,8 +194,9 @@ type Resources struct {
 }
 
 type WorkspaceRuntime struct {
-	FSShiftMethod        FSShiftMethod `json:"fsShiftMethod" validate:"required,fsShiftMethod"`
+	FSShiftMethod        FSShiftMethod `json:"fsShiftMethod" validate:"required,fs_shift_method"`
 	ContainerDRuntimeDir string        `json:"containerdRuntimeDir" validate:"required,startswith=/"`
+	ContainerDSocket     string        `json:"containerdSocket" validate:"required,startswith=/"`
 }
 
 type WorkspaceTemplates struct {
@@ -192,6 +205,7 @@ type WorkspaceTemplates struct {
 	Ghost      *corev1.Pod `json:"ghost"`
 	ImageBuild *corev1.Pod `json:"image_build"`
 	Regular    *corev1.Pod `json:"regular"`
+	Probe      *corev1.Pod `json:"probe"`
 }
 
 type Workspace struct {
@@ -223,7 +237,7 @@ type AuthProviderConfigs struct {
 
 type BlockNewUsers struct {
 	Enabled  bool     `json:"enabled"`
-	Passlist []string `json:"passlist,omitempty"`
+	Passlist []string `json:"passlist"`
 }
 
 type OAuth struct {

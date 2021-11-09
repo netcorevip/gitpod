@@ -5,12 +5,13 @@
 package common
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"math/rand"
 	"strings"
 
-	storageconfig "github.com/gitpod-io/gitpod/content-service/api/config"
+	wsk8s "github.com/gitpod-io/gitpod/common-go/kubernetes"
 	config "github.com/gitpod-io/gitpod/installer/pkg/config/v1"
 
 	"github.com/docker/distribution/reference"
@@ -19,30 +20,17 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/yaml"
 )
-
-// Valid characters for affinities are alphanumeric, -, _, . and one / as a subdomain prefix
-const (
-	AffinityLabelMeta               = "gitpod.io/workload_meta"
-	AffinityLabelIDE                = "gitpod.io/workload_ide"
-	AffinityLabelWorkspaceServices  = "gitpod.io/workload_workspace_services"
-	AffinityLabelWorkspacesRegular  = "gitpod.io/workload_workspace_regular"
-	AffinityLabelWorkspacesHeadless = "gitpod.io/workload_workspace_headless"
-)
-
-var AffinityList = []string{
-	AffinityLabelMeta,
-	AffinityLabelIDE,
-	AffinityLabelWorkspaceServices,
-	AffinityLabelWorkspacesRegular,
-	AffinityLabelWorkspacesHeadless,
-}
 
 func DefaultLabels(component string) map[string]string {
 	return map[string]string{
-		"component": component,
+		"app":                        AppName,
+		"component":                  component,
+		wsk8s.GitpodNodeServiceLabel: component,
 	}
 }
 
@@ -61,6 +49,16 @@ func DefaultEnv(cfg *config.Config) []corev1.EnvVar {
 
 	return []corev1.EnvVar{
 		{Name: "GITPOD_DOMAIN", Value: cfg.Domain},
+		{Name: "GITPOD_INSTALLATION_LONGNAME", Value: cfg.Domain},  // todo(sje): figure out these values
+		{Name: "GITPOD_INSTALLATION_SHORTNAME", Value: cfg.Domain}, // todo(sje): figure out these values
+		{Name: "GITPOD_REGION", Value: cfg.Metadata.Region},
+		{Name: "HOST_URL", Value: "https://" + cfg.Domain},
+		{Name: "KUBE_NAMESPACE", ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.namespace",
+			},
+		}},
+		{Name: "KUBE_DOMAIN", Value: "svc.cluster.local"},
 		{Name: "LOG_LEVEL", Value: strings.ToLower(logLevel)},
 	}
 }
@@ -102,7 +100,7 @@ func AnalyticsEnv(cfg *config.Config) (res []corev1.EnvVar) {
 	}}
 }
 
-func MessageBusEnv(cfg *config.Config) (res []corev1.EnvVar) {
+func MessageBusEnv(_ *config.Config) (res []corev1.EnvVar) {
 	clusterObj := corev1.LocalObjectReference{Name: InClusterMessageQueueName}
 	tlsObj := corev1.LocalObjectReference{Name: InClusterMessageQueueTLS}
 
@@ -140,60 +138,100 @@ func MessageBusEnv(cfg *config.Config) (res []corev1.EnvVar) {
 }
 
 func DatabaseEnv(cfg *config.Config) (res []corev1.EnvVar) {
-	var name string
+	var (
+		secretRef corev1.LocalObjectReference
+		envvars   []corev1.EnvVar
+	)
 
 	if pointer.BoolDeref(cfg.Database.InCluster, false) {
-		// Cluster provided internally
-		name = InClusterDbSecret
-	} else if cfg.Database.RDS.Certificate.Name != "" {
-		// AWS
-		name = cfg.Database.RDS.Certificate.Name
-	} else if cfg.Database.CloudSQL.Certificate.Name != "" {
+		secretRef = corev1.LocalObjectReference{Name: InClusterDbSecret}
+		envvars = append(envvars,
+			corev1.EnvVar{
+				Name: "DB_HOST",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: secretRef,
+					Key:                  "host",
+				}},
+			},
+			corev1.EnvVar{
+				Name: "DB_PORT",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: secretRef,
+					Key:                  "port",
+				}},
+			},
+		)
+	} else if cfg.Database.External != nil && cfg.Database.External.Certificate.Name != "" {
+		// External DB
+		secretRef = corev1.LocalObjectReference{Name: cfg.Database.External.Certificate.Name}
+		envvars = append(envvars,
+			corev1.EnvVar{
+				Name: "DB_HOST",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: secretRef,
+					Key:                  "host",
+				}},
+			},
+			corev1.EnvVar{
+				Name: "DB_PORT",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: secretRef,
+					Key:                  "port",
+				}},
+			},
+		)
+	} else if cfg.Database.CloudSQL != nil && cfg.Database.CloudSQL.ServiceAccount.Name != "" {
 		// GCP
-		name = cfg.Database.CloudSQL.Certificate.Name
+		secretRef = corev1.LocalObjectReference{Name: cfg.Database.CloudSQL.ServiceAccount.Name}
+		envvars = append(envvars,
+			corev1.EnvVar{
+				Name:  "DB_HOST",
+				Value: "cloudsqlproxy",
+			},
+			corev1.EnvVar{
+				Name:  "DB_PORT",
+				Value: "3306",
+			},
+		)
+	} else {
+		panic("invalid database configuration")
 	}
 
-	obj := corev1.LocalObjectReference{Name: name}
+	envvars = append(envvars,
+		corev1.EnvVar{
+			Name: "DB_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: secretRef,
+				Key:                  "password",
+			}},
+		},
+		corev1.EnvVar{
+			Name: "DB_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: secretRef,
+				Key:                  "username",
+			}},
+		},
+		corev1.EnvVar{
+			Name: "DB_ENCRYPTION_KEYS",
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: secretRef,
+				Key:                  "encryptionKeys",
+			}},
+		},
+		corev1.EnvVar{
+			Name:  "DB_DELETED_ENTRIES_GC_ENABLED",
+			Value: "false",
+		},
+	)
 
-	return []corev1.EnvVar{{
-		Name: "DB_HOST",
-		ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: obj,
-			Key:                  "host",
-		}},
-	}, {
-		Name: "DB_PORT",
-		ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: obj,
-			Key:                  "port",
-		}},
-	}, {
-		Name: "DB_PASSWORD",
-		ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: obj,
-			Key:                  "password",
-		}},
-	}, {
-		// todo(sje): conditional
-		Name:  "DB_DELETED_ENTRIES_GC_ENABLED",
-		Value: "false",
-	}, {
-		Name: "DB_ENCRYPTION_KEYS",
-		// todo(sje): either Value or ValueFrom
-		Value: "todo",
-		//ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-		//	LocalObjectReference: corev1.LocalObjectReference{
-		//		Name: "",
-		//	},
-		//	Key: "keys",
-		//}},
-	}}
+	return envvars
 }
 
 func DatabaseWaiterContainer(ctx *RenderContext) *corev1.Container {
 	return &corev1.Container{
 		Name:  "database-waiter",
-		Image: ImageName(ctx.Config.Repository, "service-waiter", "latest"),
+		Image: ImageName(ctx.Config.Repository, "service-waiter", ctx.VersionManifest.Components.ServiceWaiter.Version),
 		Args: []string{
 			"-v",
 			"database",
@@ -211,7 +249,7 @@ func DatabaseWaiterContainer(ctx *RenderContext) *corev1.Container {
 func MessageBusWaiterContainer(ctx *RenderContext) *corev1.Container {
 	return &corev1.Container{
 		Name:  "msgbus-waiter",
-		Image: ImageName(ctx.Config.Repository, "service-waiter", "latest"),
+		Image: ImageName(ctx.Config.Repository, "service-waiter", ctx.VersionManifest.Components.ServiceWaiter.Version),
 		Args: []string{
 			"-v",
 			"messagebus",
@@ -250,10 +288,10 @@ func KubeRBACProxyContainer() *corev1.Container {
 			},
 		},
 		Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{
-			corev1.ResourceName("cpu"):    resource.MustParse("1m"),
-			corev1.ResourceName("memory"): resource.MustParse("30Mi"),
+			corev1.ResourceCPU:    resource.MustParse("1m"),
+			corev1.ResourceMemory: resource.MustParse("30Mi"),
 		}},
-		TerminationMessagePolicy: corev1.TerminationMessagePolicy("FallbackToLogsOnError"),
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		SecurityContext: &corev1.SecurityContext{
 			RunAsUser:    pointer.Int64(65532),
 			RunAsGroup:   pointer.Int64(65532),
@@ -284,8 +322,22 @@ func Affinity(orLabels ...string) *corev1.Affinity {
 	}
 }
 
+func RepoName(repo, name string) string {
+	var ref string
+	if repo == "" {
+		ref = name
+	} else {
+		ref = fmt.Sprintf("%s/%s", strings.TrimSuffix(repo, "/"), name)
+	}
+	pref, err := reference.ParseNormalizedNamed(ref)
+	if err != nil {
+		panic(fmt.Sprintf("cannot parse image repo %s: %v", ref, err))
+	}
+	return pref.String()
+}
+
 func ImageName(repo, name, tag string) string {
-	ref := fmt.Sprintf("%s/%s:%s", strings.TrimSuffix(repo, "/"), name, tag)
+	ref := fmt.Sprintf("%s:%s", RepoName(repo, name), tag)
 	pref, err := reference.ParseNamed(ref)
 	if err != nil {
 		panic(fmt.Sprintf("cannot parse image ref %s: %v", ref, err))
@@ -297,65 +349,24 @@ func ImageName(repo, name, tag string) string {
 	return ref
 }
 
-func StorageConfig(cfg *config.Config) storageconfig.StorageConfig {
-	var res *storageconfig.StorageConfig
-	if cfg.ObjectStorage.CloudStorage != nil {
-		// TODO(cw): where do we get the GCP project from? Is it even still needed?
-		res = &storageconfig.StorageConfig{
-			Kind: storageconfig.GCloudStorage,
-			GCloudConfig: storageconfig.GCPConfig{
-				Region:             cfg.Metadata.Region,
-				Project:            "TODO",
-				CredentialsFile:    "/mnt/secrets/gcp-storage/service-account.json",
-				ParallelUpload:     6,
-				MaximumBackupCount: 3,
-			},
-		}
-	}
-	if cfg.ObjectStorage.S3 != nil {
-		// TODO(cw): where do we get the AWS secretKey and accessKey from?
-		res = &storageconfig.StorageConfig{
-			Kind: storageconfig.MinIOStorage,
-			MinIOConfig: storageconfig.MinIOConfig{
-				Endpoint:        "some-magic-amazon-value?",
-				AccessKeyID:     "TODO",
-				SecretAccessKey: "TODO",
-				Secure:          true,
-				Region:          cfg.Metadata.Region,
-				ParallelUpload:  6,
-			},
-		}
-	}
-	if b := cfg.ObjectStorage.InCluster; b != nil && *b {
-		res = &storageconfig.StorageConfig{
-			Kind: storageconfig.MinIOStorage,
-			MinIOConfig: storageconfig.MinIOConfig{
-				Endpoint:        "minio",
-				AccessKeyID:     "TODO",
-				SecretAccessKey: "TODO",
-				Secure:          true,
-				Region:          cfg.Metadata.Region,
-				ParallelUpload:  6,
-			},
-		}
+// ObjectHash marshals the objects to YAML and produces a sha256 hash of the output.
+// This function is useful for restarting pods when the config changes.
+// Takes an error as argument to make calling it more conventient. If that error is not nil,
+// it's passed right through
+func ObjectHash(objs []runtime.Object, err error) (string, error) {
+	if err != nil {
+		return "", err
 	}
 
-	if res == nil {
-		panic("no valid storage configuration set")
+	hash := sha256.New()
+	for _, o := range objs {
+		b, err := yaml.Marshal(o)
+		if err != nil {
+			return "", err
+		}
+		_, _ = hash.Write(b)
 	}
-
-	// todo(sje): create exportable type
-	res.BackupTrail = struct {
-		Enabled   bool `json:"enabled"`
-		MaxLength int  `json:"maxLength"`
-	}{
-		Enabled:   true,
-		MaxLength: 3,
-	}
-	// 5 GiB
-	res.BlobQuota = 5 * 1024 * 1024 * 1024
-
-	return *res
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
 var (
@@ -397,6 +408,10 @@ var (
 	TypeMetaNamespace = metav1.TypeMeta{
 		APIVersion: "v1",
 		Kind:       "namespace",
+	}
+	TypeMetaStatefulSet = metav1.TypeMeta{
+		APIVersion: "apps/v1",
+		Kind:       "StatefulSet",
 	}
 	TypeMetaConfigmap = metav1.TypeMeta{
 		APIVersion: "v1",
@@ -446,6 +461,10 @@ var (
 		APIVersion: "cert-manager.io/v1",
 		Kind:       "Certificate",
 	}
+	TypeMetaCertificateIssuer = metav1.TypeMeta{
+		APIVersion: "cert-manager.io/v1",
+		Kind:       "Issuer",
+	}
 	TypeMetaSecret = metav1.TypeMeta{
 		APIVersion: "v1",
 		Kind:       "Secret",
@@ -454,13 +473,15 @@ var (
 		APIVersion: "policy/v1beta1",
 		Kind:       "PodSecurityPolicy",
 	}
+	TypeMetaResourceQuota = metav1.TypeMeta{
+		APIVersion: "v1",
+		Kind:       "ResourceQuota",
+	}
+	TypeMetaBatchJob = metav1.TypeMeta{
+		APIVersion: "batch/v1",
+		Kind:       "Job",
+	}
 )
-
-type TLS struct {
-	Authority   string `json:"ca"`
-	Certificate string `json:"cert"`
-	Key         string `json:"key"`
-}
 
 // validCookieChars contains all characters which may occur in an HTTP Cookie value (unicode \u0021 through \u007E),
 // without the characters , ; and / ... I did not find more details about permissible characters in RFC2965, so I took

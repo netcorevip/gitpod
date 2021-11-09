@@ -18,7 +18,7 @@ import { TeamSubscription, TeamSubscriptionSlot, TeamSubscriptionSlotResolved } 
 import { Cancelable } from '@gitpod/gitpod-protocol/lib/util/cancelable';
 import { log, LogContext } from '@gitpod/gitpod-protocol/lib/util/logging';
 import { TraceContext } from '@gitpod/gitpod-protocol/lib/util/tracing';
-import { PageMessage, RemotePageMessage, RemoteTrackMessage, TrackMessage } from '@gitpod/gitpod-protocol/lib/analytics';
+import { IdentifyMessage, PageMessage, RemoteIdentifyMessage, RemotePageMessage, RemoteTrackMessage, TrackMessage } from '@gitpod/gitpod-protocol/lib/analytics';
 import { ImageBuilderClientProvider, LogsRequest } from '@gitpod/image-builder/lib';
 import { WorkspaceManagerClientProvider } from '@gitpod/ws-manager/lib/client-provider';
 import { ControlPortRequest, DescribeWorkspaceRequest, MarkActiveRequest, PortSpec, PortVisibility as ProtoPortVisibility, StopWorkspacePolicy, StopWorkspaceRequest } from '@gitpod/ws-manager/lib/core_pb';
@@ -26,7 +26,7 @@ import * as crypto from 'crypto';
 import { inject, injectable } from 'inversify';
 import * as opentracing from 'opentracing';
 import { URL } from 'url';
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { Disposable, ResponseError } from 'vscode-jsonrpc';
 import { IAnalyticsWriter } from "@gitpod/gitpod-protocol/lib/analytics";
 import { AuthProviderService } from '../auth/auth-provider-service';
@@ -34,7 +34,7 @@ import { HostContextProvider } from '../auth/host-context-provider';
 import { GuardedResource, ResourceAccessGuard, ResourceAccessOp } from '../auth/resource-access';
 import { Config } from '../config';
 import { NotFoundError, UnauthorizedError } from '../errors';
-import { parseRepoUrl } from '../repohost/repo-url';
+import { RepoURL } from '../repohost/repo-url';
 import { TermsProvider } from '../terms/terms-provider';
 import { TheiaPluginService } from '../theia-plugin/theia-plugin-service';
 import { AuthorizationService } from '../user/authorization-service';
@@ -809,7 +809,6 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
             let context = await contextPromise;
             await Promise.all([
                 this.mayStartWorkspace({ span }, user, runningInstancesPromise),
-                this.mayOpenContext(user, context)
             ]);
 
             // if we're forced to use the default config, mark the context as such
@@ -826,10 +825,14 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
                 if (!hostContext || !services) {
                     console.error('Unknown host: ' + host);
                 } else {
-                    if (await services.repositoryService.canInstallAutomatedPrebuilds(user, cloneUrl)) {
-                        console.log('Installing automated prebuilds for ' + cloneUrl);
-                        services.repositoryService.installAutomatedPrebuilds(user, cloneUrl);
-                    }
+                    // on purpose to not await on that installation process, because it‘s not required of workspace start
+                    // See https://github.com/gitpod-io/gitpod/pull/6420#issuecomment-953499632 for more detail
+                    (async () => {
+                        if (await services.repositoryService.canInstallAutomatedPrebuilds(user, cloneUrl)) {
+                            console.log('Installing automated prebuilds for ' + cloneUrl);
+                            await services.repositoryService.installAutomatedPrebuilds(user, cloneUrl);
+                        }
+                    })().catch((e) => console.error('Install automated prebuilds failed', e))
                 }
             }
 
@@ -946,18 +949,6 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
     protected async mayStartWorkspace(ctx: TraceContext, user: User, runningInstances: Promise<WorkspaceInstance[]>): Promise<void> {
     }
 
-    /**
-     * Extension point for implementing eligibility checks. Throws a ResponseError if not eligible.
-     * @param user
-     * @param context
-     */
-    protected async mayOpenContext(user: User, context: WorkspaceContext): Promise<void> {
-    }
-
-    public async mayAccessPrivateRepo(): Promise<boolean> {
-        return true;
-    }
-
     public async getFeaturedRepositories(): Promise<WhitelistedRepository[]> {
         const user = this.checkUser("getFeaturedRepositories");
         const repositories = await this.workspaceDb.trace({}).getFeaturedRepositories();
@@ -966,7 +957,7 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
         return (await Promise.all(repositories
             .filter(repo => repo.url != undefined)
             .map(async whitelistedRepo => {
-                const repoUrl = parseRepoUrl(whitelistedRepo.url!);
+                const repoUrl = RepoURL.parseRepoUrl(whitelistedRepo.url!);
                 if (!repoUrl) return undefined;
 
                 const { host, owner, repo } = repoUrl;
@@ -1025,7 +1016,6 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
             const status = desc.getStatus()!;
             const ports = status.getSpec()!.getExposedPortsList().map(p => <WorkspaceInstancePort>{
                 port: p.getPort(),
-                targetPort: p.getTarget(),
                 url: p.getUrl(),
                 visibility: this.portVisibilityFromProto(p.getVisibility())
             });
@@ -1059,11 +1049,6 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
             req.setId(runningInstance.id);
             const spec = new PortSpec();
             spec.setPort(port.port);
-            if (!!port.targetPort) {
-                spec.setTarget(port.targetPort);
-            } else {
-                spec.setTarget(port.port);
-            }
             spec.setVisibility(this.portVisibilityToProto(port.visibility))
             req.setSpec(spec);
             req.setExpose(true);
@@ -1247,6 +1232,10 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
     }
 
     async takeSnapshot(options: GitpodServer.TakeSnapshotOptions): Promise<string> {
+        throw new ResponseError(ErrorCodes.EE_FEATURE, `Snapshot support is implemented in Gitpod's Enterprise Edition`);
+    }
+
+    async waitForSnapshot(snapshotId: string): Promise<void> {
         throw new ResponseError(ErrorCodes.EE_FEATURE, `Snapshot support is implemented in Gitpod's Enterprise Edition`);
     }
 
@@ -2041,6 +2030,18 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
         }
     }
 
+    public async identifyUser(event: RemoteIdentifyMessage): Promise<void> {
+        //Identify calls collect user informmation. If the user is unknown, we don't make a call (privacy preservation)
+        const user = this.checkUser("IdentifyUser");
+
+        const msg: IdentifyMessage = {
+            userId: user.id,
+            traits: event.traits,
+            context: event.context
+        };
+        this.analytics.identify(msg);
+    }
+
     async getTerms(): Promise<Terms> {
         // Terms are publicly available, thus no user check here.
 
@@ -2066,9 +2067,6 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
         throw new ResponseError(ErrorCodes.SAAS_FEATURE, `Not implemented in this version`);
     }
     async isStudent(): Promise<boolean> {
-        throw new ResponseError(ErrorCodes.SAAS_FEATURE, `Not implemented in this version`);
-    }
-    async getPrivateRepoTrialEndDate(): Promise<string | undefined> {
         throw new ResponseError(ErrorCodes.SAAS_FEATURE, `Not implemented in this version`);
     }
     async getAccountStatement(options: GitpodServer.GetAccountStatementOptions): Promise<AccountStatement | undefined> {

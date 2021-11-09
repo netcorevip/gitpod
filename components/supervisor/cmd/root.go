@@ -14,6 +14,7 @@ import (
 	"github.com/gitpod-io/gitpod/common-go/log"
 )
 
+
 // rootCmd 表示在没有任何子命令的情况下调用时的基本命令
 var rootCmd = &cobra.Command{
 	Use:   "supervisor",
@@ -21,9 +22,9 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	// ServiceName is the name we use for tracing/logging
+	// ServiceName is the name we use for tracing/logging.
 	ServiceName = "supervisor"
-	// Version of this service - set during build
+	// Version of this service - set during build.
 	Version = ""
 )
 
@@ -51,5 +52,5 @@ func (fatalTerminationLogHook) Fire(e *logrus.Entry) error {
 		msg += ": " + err.(error).Error()
 	}
 
-	return os.WriteFile("/dev/termination-log", []byte(msg), 0644)
+	return os.WriteFile("/dev/termination-log", []byte(msg), 0o644)
 }

@@ -5,6 +5,7 @@
 package registryfacade
 
 import (
+	"github.com/gitpod-io/gitpod/installer/pkg/cluster"
 	"github.com/gitpod-io/gitpod/installer/pkg/common"
 	dockerregistry "github.com/gitpod-io/gitpod/installer/pkg/components/docker-registry"
 	wsmanager "github.com/gitpod-io/gitpod/installer/pkg/components/ws-manager"
@@ -19,6 +20,13 @@ import (
 
 func daemonset(ctx *common.RenderContext) ([]runtime.Object, error) {
 	labels := common.DefaultLabels(Component)
+
+	var hashObj []runtime.Object
+	if objs, err := configmap(ctx); err != nil {
+		return nil, err
+	} else {
+		hashObj = append(hashObj, objs...)
+	}
 
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
@@ -46,7 +54,7 @@ func daemonset(ctx *common.RenderContext) ([]runtime.Object, error) {
 			Name: name,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: dockerregistry.BuiltInRegistrySecret,
+					SecretName: dockerregistry.BuiltInRegistryAuth,
 				},
 			},
 		})
@@ -56,6 +64,16 @@ func daemonset(ctx *common.RenderContext) ([]runtime.Object, error) {
 			MountPath: "/mnt/pull-secret.json",
 			SubPath:   ".dockerconfigjson",
 		})
+
+		if objs, err := common.DockerRegistryHash(ctx); err != nil {
+			return nil, err
+		} else {
+			hashObj = append(hashObj, objs...)
+		}
+	}
+	configHash, err := common.ObjectHash(hashObj, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return []runtime.Object{&appsv1.DaemonSet{
@@ -71,11 +89,14 @@ func daemonset(ctx *common.RenderContext) ([]runtime.Object, error) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   Component,
 					Labels: labels,
+					Annotations: map[string]string{
+						common.AnnotationConfigChecksum: configHash,
+					},
 				},
 				Spec: corev1.PodSpec{
-					PriorityClassName: "system-node-critical",
+					PriorityClassName: common.SystemNodeCritical,
 					// todo(sje): do we need affinity?
-					Affinity:                      &corev1.Affinity{},
+					Affinity:                      common.Affinity(cluster.AffinityLabelWorkspacesRegular, cluster.AffinityLabelWorkspacesHeadless),
 					ServiceAccountName:            Component,
 					EnableServiceLinks:            pointer.Bool(false),
 					DNSPolicy:                     "ClusterFirst",

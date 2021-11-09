@@ -34,7 +34,7 @@ export default function () {
     const { teams } = useContext(TeamsContext);
     const team = getCurrentTeam(location, teams);
     const match = useRouteMatch<{ team: string, resource: string }>("/(t/)?:team/:resource");
-    const projectName = match?.params?.resource !== 'workspaces' ? match?.params?.resource : undefined;
+    const projectSlug = match?.params?.resource !== 'workspaces' ? match?.params?.resource : undefined;
     const [projects, setProjects] = useState<Project[]>([]);
     const [activeWorkspaces, setActiveWorkspaces] = useState<WorkspaceInfo[]>([]);
     const [inactiveWorkspaces, setInactiveWorkspaces] = useState<WorkspaceInfo[]>([]);
@@ -59,7 +59,7 @@ export default function () {
 
     useEffect(() => {
         // only show example repos on the global user context
-        if (!team && !projectName) {
+        if (!team && !projectSlug) {
             getGitpodService().server.getFeaturedRepositories().then(setRepos);
         }
         (async () => {
@@ -68,8 +68,8 @@ export default function () {
                 : await getGitpodService().server.getUserProjects());
 
             let project: Project | undefined = undefined;
-            if (projectName) {
-                project = projects.find(p => p.name === projectName);
+            if (projectSlug) {
+                project = projects.find(p => p.slug ? p.slug === projectSlug : p.name === projectSlug);
                 if (project) {
                     setProjects([project]);
                 }
@@ -95,7 +95,7 @@ export default function () {
     const hideStartWSModal = () => setIsTemplateModelOpen(false);
 
     const getRecentSuggestions: () => WsStartEntry[] = () => {
-        if (projectName || team) {
+        if (projectSlug || team) {
             return projects.map(p => {
                 const remoteUrl = toRemoteURL(p.cloneUrl);
                 return {
@@ -205,7 +205,7 @@ export default function () {
                             </>
                             :<>
                                 <h3 className="text-center pb-3 text-gray-500 dark:text-gray-400">No Workspaces</h3>
-                                <div className="text-center pb-6 text-gray-500">Prefix any git repository URL with gitpod.io/# or create a new workspace for a recently used project. <a className="gp-link" href="https://www.gitpod.io/docs/getting-started/">Learn more</a></div>
+                                <div className="text-center pb-6 text-gray-500">Prefix any Git repository URL with {window.location.host}/# or create a new workspace for a recently used project. <a className="gp-link" href="https://www.gitpod.io/docs/getting-started/">Learn more</a></div>
                                 <span>
                                     <button onClick={showStartWSModal}>New Workspace</button>
                                 </span>

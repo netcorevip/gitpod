@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
+	"time"
 
 	"github.com/gitpod-io/gitpod/common-go/log"
+	"github.com/gitpod-io/gitpod/ws-deployment/pkg/common"
 	"github.com/gitpod-io/gitpod/ws-deployment/pkg/orchestrate"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +33,10 @@ var deployCmd = &cobra.Command{
 	Short: "Creates a new workspace cluster and installs gitpod on it",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := getConfig()
+
+		verifyVersionsManifestFilePath(versionsManifestFile)
+
+		rand.Seed(time.Now().UnixNano())
 		randomId := fmt.Sprintf("%d", rand.Intn(200)+100)
 		cfg.InitializeWorkspaceClusterNames(randomId) // TODO(prs):revisit and update this
 		log.Log.Infof("%+v", cfg)
@@ -40,7 +46,20 @@ var deployCmd = &cobra.Command{
 		if err != nil {
 			log.Log.Infof("error while trying to activate service account: %s. Assuming SA is already activated and configured %s", out)
 		}
-		orchestrate.Deploy(&cfg.Project, cfg.WorkspaceClusters)
+
+		// Wrap contexts into common.Context object
+		context := common.Context{
+			Project: &cfg.Project,
+			Gitpod: &common.GitpodContext{
+				VersionsManifestFilePath: versionsManifestFile,
+			},
+			Overrides: &common.Overrides{
+				DryRun:            dryRun,
+				OverwriteExisting: overwriteExisting,
+			},
+		}
+
+		orchestrate.Deploy(&context, cfg.WorkspaceClusters)
 	},
 }
 

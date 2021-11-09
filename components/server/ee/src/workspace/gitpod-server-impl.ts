@@ -7,12 +7,12 @@
 import { injectable, inject } from "inversify";
 import { GitpodServerImpl } from "../../../src/workspace/gitpod-server-impl";
 import { TraceContext } from "@gitpod/gitpod-protocol/lib/util/tracing";
-import { GitpodServer, GitpodClient, AdminGetListRequest, User, AdminGetListResult, Permission, AdminBlockUserRequest, AdminModifyRoleOrPermissionRequest, RoleOrPermission, AdminModifyPermanentWorkspaceFeatureFlagRequest, UserFeatureSettings, AdminGetWorkspacesRequest, WorkspaceAndInstance, GetWorkspaceTimeoutResult, WorkspaceTimeoutDuration, WorkspaceTimeoutValues, SetWorkspaceTimeoutResult, WorkspaceContext, CreateWorkspaceMode, WorkspaceCreationResult, PrebuiltWorkspaceContext, CommitContext, PrebuiltWorkspace, PermissionName, WorkspaceInstance, EduEmailDomain, ProviderRepository, Queue, PrebuildWithStatus, CreateProjectParams, Project, StartPrebuildResult, ClientHeaderFields } from "@gitpod/gitpod-protocol";
+import { GitpodServer, GitpodClient, AdminGetListRequest, User, AdminGetListResult, Permission, AdminBlockUserRequest, AdminModifyRoleOrPermissionRequest, RoleOrPermission, AdminModifyPermanentWorkspaceFeatureFlagRequest, UserFeatureSettings, AdminGetWorkspacesRequest, WorkspaceAndInstance, GetWorkspaceTimeoutResult, WorkspaceTimeoutDuration, WorkspaceTimeoutValues, SetWorkspaceTimeoutResult, WorkspaceContext, CreateWorkspaceMode, WorkspaceCreationResult, PrebuiltWorkspaceContext, CommitContext, PrebuiltWorkspace, PermissionName, WorkspaceInstance, EduEmailDomain, ProviderRepository, Queue, PrebuildWithStatus, CreateProjectParams, Project, StartPrebuildResult, ClientHeaderFields, Workspace } from "@gitpod/gitpod-protocol";
 import { ResponseError } from "vscode-jsonrpc";
 import { TakeSnapshotRequest, AdmissionLevel, ControlAdmissionRequest, StopWorkspacePolicy, DescribeWorkspaceRequest, SetTimeoutRequest } from "@gitpod/ws-manager/lib";
 import { ErrorCodes } from "@gitpod/gitpod-protocol/lib/messaging/error";
 import * as opentracing from 'opentracing';
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { log, LogContext } from "@gitpod/gitpod-protocol/lib/util/logging";
 import { LicenseEvaluator, LicenseKeySource } from "@gitpod/licensor/lib";
 import { Feature } from "@gitpod/licensor/lib/api";
@@ -41,6 +41,8 @@ import { Chargebee as chargebee } from '@gitpod/gitpod-payment-endpoint/lib/char
 import { GitHubAppSupport } from "../github/github-app-support";
 import { GitLabAppSupport } from "../gitlab/gitlab-app-support";
 import { Config } from "../../../src/config";
+import { SnapshotService, WaitForSnapshotOptions } from "./snapshot-service";
+import { SafePromise } from "@gitpod/gitpod-protocol/lib/util/safe-promise";
 
 @injectable()
 export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodServer> {
@@ -72,6 +74,8 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     @inject(GitLabAppSupport) protected readonly gitLabAppSupport: GitLabAppSupport;
 
     @inject(Config) protected readonly config: Config;
+
+    @inject(SnapshotService) protected readonly snapshotService: SnapshotService;
 
     initialize(client: GitpodClient | undefined, user: User, accessGuard: ResourceAccessGuard, clientHeaderFields: ClientHeaderFields): void {
         super.initialize(client, user, accessGuard, clientHeaderFields);
@@ -128,12 +132,6 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
         ))
     }
 
-    // eligibility checks and extension points
-    public async mayAccessPrivateRepo(): Promise<boolean> {
-        const user = this.checkAndBlockUser("mayAccessPrivateRepo");
-        return this.eligibilityService.mayOpenPrivateRepo(user, new Date());
-    }
-
     protected async mayStartWorkspace(ctx: TraceContext, user: User, runningInstances: Promise<WorkspaceInstance[]>): Promise<void> {
         await super.mayStartWorkspace(ctx, user, runningInstances);
 
@@ -152,17 +150,6 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
             throw e;
         } finally {
             span.finish();
-        }
-    }
-
-
-
-    protected async mayOpenContext(user: User, context: WorkspaceContext): Promise<void> {
-        await super.mayOpenContext(user, context);
-
-        const mayOpenContext = await this.eligibilityService.mayOpenContext(user, context, new Date())
-        if (!mayOpenContext) {
-            throw new ResponseError(ErrorCodes.PLAN_DOES_NOT_ALLOW_PRIVATE_REPOS, `You do not have a plan that allows for opening private repositories.`);
         }
     }
 
@@ -363,46 +350,94 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
         this.requireEELicense(Feature.FeatureSnapshot);
 
         const user = this.checkAndBlockUser("takeSnapshot");
-        const { workspaceId, layoutData } = options;
+        const { workspaceId, dontWait } = options;
 
         const span = opentracing.globalTracer().startSpan("takeSnapshot");
         span.setTag("workspaceId", workspaceId);
         span.setTag("userId", user.id);
 
         try {
-            const workspace = await this.workspaceDb.trace({ span }).findById(workspaceId);
-            if (!workspace || workspace.ownerId !== user.id) {
-                throw new ResponseError(ErrorCodes.NOT_FOUND, `Workspace ${workspaceId} does not exist.`);
-            }
+            const workspace = await this.guardSnaphotAccess(span, user.id, workspaceId);
 
             const instance = await this.workspaceDb.trace({ span }).findRunningInstance(workspaceId);
             if (!instance) {
                 throw new ResponseError(ErrorCodes.NOT_FOUND, `Workspace ${workspaceId} has no running instance`);
             }
-
             await this.guardAccess({ kind: "workspaceInstance", subject: instance, workspace}, "get");
-            await this.guardAccess({ kind: "snapshot", subject: undefined, workspaceOwnerID: workspace.ownerId, workspaceID: workspace.id }, "create");
 
             const client = await this.workspaceManagerClientProvider.get(instance.region);
             const request = new TakeSnapshotRequest();
             request.setId(instance.id);
+            request.setReturnImmediately(true);
+
+            // this triggers the snapshots, but returns early! cmp. waitForSnapshot to wait for it's completion
             const resp = await client.takeSnapshot({ span }, request);
 
-            const id = uuidv4()
-            this.workspaceDb.trace({ span }).storeSnapshot({
-                id,
-                creationTime: new Date().toISOString(),
-                bucketId: resp.getUrl(),
-                originalWorkspaceId: workspaceId,
-                layoutData
-            });
+            const snapshot = await this.snapshotService.createSnapshot(options, resp.getUrl());
 
-            return id;
-        } catch (e) {
-            TraceContext.logError({ span }, e);
-            throw e;
+            // to be backwards compatible during rollout, we require new clients to explicitly pass "dontWait: true"
+            const waitOpts = { workspaceOwner: workspace.ownerId, snapshot };
+            if (!dontWait) {
+                // this mimicks the old behavior: wait until the snapshot is through
+                await this.internalDoWaitForWorkspace(waitOpts);
+            } else {
+                // start driving the snapshot immediately
+                SafePromise.catchAndLog(this.internalDoWaitForWorkspace(waitOpts), { userId: user.id, workspaceId: workspaceId})
+            }
+
+            return snapshot.id;
+        } catch (err) {
+            TraceContext.logError({ span }, err);
+            throw err;
         } finally {
             span.finish()
+        }
+    }
+
+    protected async guardSnaphotAccess(span: opentracing.Span, userId: string, workspaceId: string) : Promise<Workspace> {
+        const workspace = await this.workspaceDb.trace({ span }).findById(workspaceId);
+        if (!workspace || workspace.ownerId !== userId) {
+            throw new ResponseError(ErrorCodes.NOT_FOUND, `Workspace ${workspaceId} does not exist.`);
+        }
+        await this.guardAccess({ kind: "snapshot", subject: undefined, workspaceOwnerID: workspace.ownerId, workspaceID: workspace.id }, "create");
+
+        return workspace;
+    }
+
+    /**
+     * @param snapshotId
+     * @throws ResponseError with either NOT_FOUND or SNAPSHOT_ERROR in case the snapshot is not done yet.
+     */
+    async waitForSnapshot(snapshotId: string): Promise<void> {
+        this.requireEELicense(Feature.FeatureSnapshot);
+
+        const user = this.checkAndBlockUser("waitForSnapshot");
+
+        const span = opentracing.globalTracer().startSpan("waitForSnapshot");
+        span.setTag("snapshotId", snapshotId);
+        span.setTag("userId", user.id);
+
+        try {
+            const snapshot = await this.workspaceDb.trace({ span }).findSnapshotById(snapshotId);
+            if (!snapshot) {
+                throw new ResponseError(ErrorCodes.NOT_FOUND, `No snapshot with id '${snapshotId}' found.`)
+            }
+            const snapshotWorkspace = await this.guardSnaphotAccess(span, user.id, snapshot.originalWorkspaceId);
+            await this.internalDoWaitForWorkspace({ workspaceOwner: snapshotWorkspace.ownerId, snapshot });
+        } catch (err) {
+            TraceContext.logError({ span }, err);
+            throw err;
+        } finally {
+            span.finish()
+        }
+    }
+
+    protected async internalDoWaitForWorkspace(opts: WaitForSnapshotOptions) {
+        try {
+            await this.snapshotService.waitForSnapshot(opts);
+        } catch (err) {
+            // wrap in SNAPSHOT_ERROR to signal this call should not be retried.
+            throw new ResponseError(ErrorCodes.SNAPSHOT_ERROR, err.toString());
         }
     }
 
@@ -870,17 +905,6 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
         const user = this.checkUser('getAppliedCoupons');
         const couponIds = await this.couponComputer.getAppliedCouponIds(user, new Date());
         return this.getChargebeePlanCoupons(couponIds);
-    }
-
-    public async getPrivateRepoTrialEndDate(): Promise<string | undefined> {
-        const user = this.checkUser("getPrivateTrialInfo");
-
-        const endDate = await this.eligibilityService.getPrivateRepoTrialEndDate(user);
-        if (!endDate) {
-            return undefined;
-        } else {
-            return endDate.toISOString();
-        }
     }
 
     // chargebee

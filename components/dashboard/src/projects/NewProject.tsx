@@ -19,6 +19,7 @@ import search from "../icons/search.svg";
 import moment from "moment";
 import { UserContext } from "../user-context";
 import { trackEvent } from "../Analytics";
+import exclamation from "../images/exclamation.svg";
 
 export default function NewProject() {
     const location = useLocation();
@@ -161,7 +162,7 @@ export default function NewProject() {
         if (!provider) {
             return;
         }
-        const repo = reposInAccounts.find(r => r.account === selectedAccount && r.name === selectedRepo);
+        const repo = reposInAccounts.find(r => r.account === selectedAccount && r.path === selectedRepo);
         if (!repo) {
             console.error("No repo selected!")
             return;
@@ -170,6 +171,7 @@ export default function NewProject() {
         try {
             await getGitpodService().server.createProject({
                 name: repo.name,
+                slug: (repo.path ? repo.path : repo.name),
                 cloneUrl: repo.cloneUrl,
                 account: repo.account,
                 provider,
@@ -177,7 +179,7 @@ export default function NewProject() {
                 appInstallationId: String(repo.installationId),
             });
 
-            history.push(`/${User.is(teamOrUser) ? 'projects' : 't/'+teamOrUser.slug}/${repo.name}/configure`);
+            history.push(`/${User.is(teamOrUser) ? 'projects' : 't/'+teamOrUser.slug}/${repo.path}/configure`);
         } catch (error) {
             const message = (error && error?.message) || "Failed to create new project."
             window.alert(message);
@@ -267,7 +269,7 @@ export default function NewProject() {
                                     <div className="flex justify-end">
                                         <div className="h-full my-auto flex self-center opacity-0 group-hover:opacity-100">
                                             {!r.inUse ? (
-                                                <button className="primary" onClick={() => setSelectedRepo(r.name)}>Select</button>
+                                                <button className="primary" onClick={() => setSelectedRepo(r.path)}>Select</button>
                                             ) : (
                                                 <p className="my-auto">already taken</p>
                                             )}
@@ -308,6 +310,9 @@ export default function NewProject() {
                         )}
                     </div>
             )}
+            <p className="text-left w-full mt-12 text-gray-500">
+                <strong>Teams &amp; Projects</strong> are currently in Beta. <a href="https://github.com/gitpod-io/gitpod/issues/5095" target="gitpod-feedback-issue" rel="noopener" className="gp-link">Send feedback</a> or open a <a href="/workspaces" className="gp-link">New Workspace</a> with an example repository.
+            </p>
         </>
         );
 
@@ -385,7 +390,7 @@ export default function NewProject() {
 
     return (<div className="flex flex-col w-96 mt-24 mx-auto items-center">
         <h1>New Project</h1>
-        <p className="text-gray-500 text-center text-base">Select a git repository on <strong>{provider}</strong>. (<a className="gp-link cursor-pointer" onClick={() => setShowGitProviders(true)}>change</a>)</p>
+        <p className="text-gray-500 text-center text-base">Select a Git repository on <strong>{provider}</strong>. (<a className="gp-link cursor-pointer" onClick={() => setShowGitProviders(true)}>change</a>)</p>
 
         {!selectedRepo && renderSelectRepository()}
 
@@ -401,6 +406,7 @@ function GitProviders(props: {
     onHostSelected: (host: string, updateUser?: boolean) => void
 }) {
     const [authProviders, setAuthProviders] = useState<AuthProviderInfo[]>([]);
+    const [ errorMessage, setErrorMessage ] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         (async () => {
@@ -410,6 +416,8 @@ function GitProviders(props: {
     }, []);
 
     const selectProvider = async (ap: AuthProviderInfo) => {
+        setErrorMessage(undefined);
+
         const token = await getGitpodService().server.getToken({ host: ap.host });
         if (token) {
             props.onHostSelected(ap.host);
@@ -421,8 +429,17 @@ function GitProviders(props: {
             onSuccess: async () => {
                 props.onHostSelected(ap.host, true);
             },
-            onError: (error) => {
-                console.log(error);
+            onError: (payload) => {
+                let errorMessage: string;
+                if (typeof payload === "string") {
+                    errorMessage = payload;
+                } else {
+                    errorMessage = payload.description ? payload.description : `Error: ${payload.error}`;
+                    if (payload.error === "email_taken") {
+                        errorMessage = `Email address already used in another account. Please log in with ${(payload as any).host}.`;
+                    }
+                }
+                setErrorMessage(errorMessage);
             }
         });
     }
@@ -443,6 +460,18 @@ function GitProviders(props: {
                         );
                     })}
                 </div>
+
+                {errorMessage && (
+                    <div className="mt-16 flex space-x-2 py-6 px-6 w-96 justify-between bg-gitpod-kumquat-light rounded-xl">
+                        <div className="pr-3 self-center w-6">
+                            <img src={exclamation} />
+                        </div>
+                        <div className="flex-1 flex flex-col">
+                            <p className="text-gitpod-red text-sm">{errorMessage}</p>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </div>
     )

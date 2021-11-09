@@ -4,7 +4,7 @@
  * See License-AGPL.txt in the project root for license information.
  */
 
- import * as uuidv4 from 'uuid/v4';
+ import { v4 as uuidv4 } from 'uuid';
 import { User } from './protocol';
 import { oneMonthLater } from './util/timeutil';
 
@@ -90,7 +90,6 @@ export interface SessionDescription {
     contextUrl: string;
     workspaceId: string;
     workspaceInstanceId: string;
-    private: boolean;
 }
 export namespace SessionDescription {
     export function is(obj: any): obj is SessionDescription {
@@ -99,7 +98,6 @@ export namespace SessionDescription {
             && obj.hasOwnProperty('contextUrl')
             && obj.hasOwnProperty('workspaceId')
             && obj.hasOwnProperty('workspaceInstanceId')
-            && obj.hasOwnProperty('private');
     }
 }
 

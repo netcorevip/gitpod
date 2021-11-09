@@ -86,6 +86,13 @@ message IDEStatusRequest {
 }
 message IDEStatusResponse {
     bool ok = 1;
+
+    message DesktopStatus {
+        string link = 1;
+        string label = 2;
+    }
+
+    DesktopStatus desktop = 2;
 }
 
 message ContentStatusRequest {
@@ -163,7 +170,8 @@ message PortsStatus {
     // contains the port where the proxy is listening on.
     uint32 local_port = 1;
 
-    uint32 global_port = 2;
+    // DEPRECATED global_port
+    reserved 2;
 
     // served is true if there is a process in the workspace that serves this port.
     bool served = 4;

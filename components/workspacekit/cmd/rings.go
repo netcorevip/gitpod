@@ -249,6 +249,11 @@ var ring1Cmd = &cobra.Command{
 			fsshift = api.FSShiftMethod(v)
 		}
 
+		var (
+			wrapNetns         = os.Getenv("WORKSPACEKIT_USE_NETNS") == "true"
+			slirp4netnsSocket string
+		)
+
 		type mnte struct {
 			Target string
 			Source string
@@ -257,7 +262,6 @@ var ring1Cmd = &cobra.Command{
 		}
 
 		var mnts []mnte
-
 		switch fsshift {
 		case api.FSShiftMethod_FUSE:
 			mnts = append(mnts,
@@ -304,6 +308,17 @@ var ring1Cmd = &cobra.Command{
 			)
 		}
 
+		if wrapNetns {
+			f, err := ioutil.TempDir("", "wskit-slirp4netns")
+			if err != nil {
+				log.WithError(err).Error("cannot create slirp4netns socket tempdir")
+				return
+			}
+
+			slirp4netnsSocket = filepath.Join(f, "slirp4netns.sock")
+			mnts = append(mnts, mnte{Target: "/.supervisor/slirp4netns.sock", Source: f, Flags: unix.MS_BIND | unix.MS_REC})
+		}
+
 		for _, m := range mnts {
 			dst := filepath.Join(ring2Root, m.Target)
 			_ = os.MkdirAll(dst, 0644)
@@ -328,12 +343,23 @@ var ring1Cmd = &cobra.Command{
 			}
 		}
 
+		// We deliberately do not bind mount `/etc/resolv.conf`, but instead place a copy
+		// so that users in the workspace can modify the file.
+		err = copyResolvConf(ring2Root)
+		if err != nil {
+			log.WithError(err).Error("cannot copy resolv.conf")
+			return
+		}
+
 		env := make([]string, 0, len(os.Environ()))
 		for _, e := range os.Environ() {
 			if strings.HasPrefix(e, "WORKSPACEKIT_") {
 				continue
 			}
 			env = append(env, e)
+		}
+		if wrapNetns {
+			env = append(env, "DOCKER_NOT_USE_NETNS=true")
 		}
 
 		socketFN := filepath.Join(os.TempDir(), fmt.Sprintf("workspacekit-ring1-%d.unix", time.Now().UnixNano()))
@@ -344,10 +370,17 @@ var ring1Cmd = &cobra.Command{
 		}
 		defer skt.Close()
 
+		var (
+			cloneFlags uintptr = syscall.CLONE_NEWNS | syscall.CLONE_NEWPID
+		)
+		if wrapNetns {
+			cloneFlags = cloneFlags | syscall.CLONE_NEWNET
+		}
+
 		cmd := exec.Command("/proc/self/exe", "ring2", socketFN)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			Pdeathsig:  syscall.SIGKILL,
-			Cloneflags: syscall.CLONE_NEWNS | syscall.CLONE_NEWPID,
+			Cloneflags: cloneFlags,
 		}
 		cmd.Dir = ring2Root
 		cmd.Stdin = os.Stdin
@@ -428,6 +461,31 @@ var ring1Cmd = &cobra.Command{
 		if err != nil {
 			log.WithError(err).Error("ring2 did not connect successfully")
 			return
+		}
+
+		if wrapNetns {
+			slirpCmd := exec.Command("slirp4netns",
+				"--configure",
+				"--mtu=65520",
+				"--disable-host-loopback",
+				"--api-socket", slirp4netnsSocket,
+				strconv.Itoa(cmd.Process.Pid),
+				"tap0",
+			)
+			slirpCmd.SysProcAttr = &syscall.SysProcAttr{
+				Pdeathsig: syscall.SIGKILL,
+			}
+			slirpCmd.Stdin = os.Stdin
+			slirpCmd.Stdout = os.Stdout
+			slirpCmd.Stderr = os.Stderr
+
+			err = slirpCmd.Start()
+			if err != nil {
+				log.WithError(err).Error("cannot start slirp4netns")
+				return
+			}
+			//nolint:errcheck
+			defer slirpCmd.Process.Kill()
 		}
 
 		log.Info("signaling to child process")
@@ -518,7 +576,9 @@ var (
 		"/dev",
 		"/etc/hosts",
 		"/etc/hostname",
-		"/etc/resolv.conf",
+	}
+	rejectMountPaths = map[string]struct{}{
+		"/etc/resolv.conf": {},
 	}
 )
 
@@ -566,6 +626,11 @@ func findBindMountCandidates(procMounts io.Reader, readlink func(path string) (d
 			continue
 		}
 
+		// reject known paths
+		if _, ok := rejectMountPaths[path]; ok {
+			continue
+		}
+
 		// test remaining candidates if they're a Kubernetes configMap or secret
 		ln, err := readlink(filepath.Join(path, "..data"))
 		if err != nil {
@@ -578,6 +643,34 @@ func findBindMountCandidates(procMounts io.Reader, readlink func(path string) (d
 		mounts = append(mounts, path)
 	}
 	return mounts, scanner.Err()
+}
+
+// copyResolvConf copies /etc/resolv.conf to <ring2root>/etc/resolv.conf
+func copyResolvConf(ring2root string) error {
+	fn := "/etc/resolv.conf"
+	stat, err := os.Stat(fn)
+	if err != nil {
+		return err
+	}
+
+	org, err := os.Open(fn)
+	if err != nil {
+		return err
+	}
+	defer org.Close()
+
+	dst, err := os.OpenFile(filepath.Join(ring2root, fn), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, stat.Mode())
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, org)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func receiveSeccmpFd(conn *net.UnixConn) (libseccomp.ScmpFd, error) {

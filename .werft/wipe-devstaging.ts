@@ -1,8 +1,12 @@
-import { werft, exec } from './util/shell';
+import { Werft } from './util/werft'
 import { wipePreviewEnvironment, listAllPreviewNamespaces } from './util/kubectl';
 import * as fs from 'fs';
 import { deleteExternalIp } from './util/gcloud';
+import * as Tracing from './observability/tracing'
+import { SpanStatusCode } from '@opentelemetry/api';
 
+// Will be set once tracing has been initialized
+let werft: Werft
 
 async function wipePreviewCluster(pathToKubeConfig: string) {
     const namespace_raw = process.env.NAMESPACE;
@@ -34,8 +38,7 @@ async function k3sCleanup() {
 
         // Since werft creates static external IP for ws-proxy of k3s using gcloud
         // we delete it here. We retry because the ws-proxy-service which binds to this IP might not be deleted immediately
-        const k3sWsProxyIP =
-            deleteExternalIp("wipe", namespace_raw)
+        /* no await */ deleteExternalIp("wipe", namespace_raw || "not-set");
     } else {
         werft.log("wipe", `file /workspace/k3s-external.yaml does not exist, no cleanup for k3s cluster`)
     }
@@ -47,9 +50,23 @@ async function devCleanup() {
 }
 
 // sweeper runs in the dev cluster so we need to delete the k3s cluster first and then delete self contained namespace
-k3sCleanup().then(() => {
-    devCleanup()
-})
 
-
-werft.done('wipe');
+Tracing.initialize()
+    .then(() => {
+        werft = new Werft("wipe-devstaging")
+        werft.phase('wipe')
+    })
+    .then(() => k3sCleanup())
+    .then(() => devCleanup())
+    .then(() => werft.done('wipe'))
+    .then(() => werft.endAllSpans())
+    .catch((err) => {
+        werft.rootSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: err
+        })
+        werft.endAllSpans()
+        console.log('Error', err)
+        // Explicitly not using process.exit as we need to flush tracing, see tracing.js
+        process.exitCode = 1
+    });

@@ -4,7 +4,11 @@
 
 package dockerregistry
 
+import "github.com/gitpod-io/gitpod/installer/pkg/common"
+
 const (
-	BuiltInRegistrySecret = "builtin-registry-auth"
-	Component             = "docker-registry"
+	BuiltInRegistryAuth  = common.RegistryAuthSecret
+	BuiltInRegistryCerts = common.RegistryTLSCertSecret
+	Component            = "docker-registry"
+	RegistryName         = "registry"
 )

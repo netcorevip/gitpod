@@ -6,27 +6,32 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"strings"
-
-	"github.com/gitpod-io/gitpod/installer/pkg/common"
 
 	"github.com/Masterminds/semver"
 	certmanager "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 )
 
 // checkAffinityLabels validates that the nodes have all the required affinity labels applied
 // It assumes all the values are `true`
-func checkAffinityLabels(list *v1.NodeList, _ *rest.Config) []ValidationError {
+func checkAffinityLabels(ctx context.Context, config *rest.Config, namespace string) ([]ValidationError, error) {
+	nodes, err := listNodesFromContext(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
 	affinityList := map[string]bool{}
-	for _, affinity := range common.AffinityList {
+	for _, affinity := range AffinityList {
 		affinityList[affinity] = false
 	}
 
-	var resultErr []ValidationError
-	for _, node := range list.Items {
+	var res []ValidationError
+	for _, node := range nodes {
 		for k, v := range node.GetLabels() {
 			if _, found := affinityList[k]; found {
 				affinityList[k] = v == "true"
@@ -37,32 +42,29 @@ func checkAffinityLabels(list *v1.NodeList, _ *rest.Config) []ValidationError {
 	// Check all the values in the map are `true`
 	for k, v := range affinityList {
 		if !v {
-			resultErr = append(resultErr, ValidationError{
+			res = append(res, ValidationError{
 				Message: "Affinity label not found in cluster: " + k,
 				Type:    ValidationStatusError,
 			})
 		}
 	}
-	return resultErr
+	return res, nil
 }
 
 // checkCertManagerInstalled checks that cert-manager is installed as a cluster dependency
-func checkCertManagerInstalled(_ *v1.NodeList, restConfig *rest.Config) []ValidationError {
-	clientset, err := certmanager.NewForConfig(restConfig)
+func checkCertManagerInstalled(ctx context.Context, config *rest.Config, namespace string) ([]ValidationError, error) {
+	client, err := certmanager.NewForConfig(config)
 	if err != nil {
-		return []ValidationError{{
-			Message: err.Error(),
-			Type:    ValidationStatusError,
-		}}
+		return nil, err
 	}
 
-	clusterIssuers, err := clientset.CertmanagerV1().ClusterIssuers().List(context.TODO(), metav1.ListOptions{})
+	clusterIssuers, err := client.CertmanagerV1().ClusterIssuers().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		// If cert-manager not installed, this will error
 		return []ValidationError{{
 			Message: err.Error(),
 			Type:    ValidationStatusError,
-		}}
+		}}, nil
 	}
 
 	if len(clusterIssuers.Items) == 0 {
@@ -70,26 +72,102 @@ func checkCertManagerInstalled(_ *v1.NodeList, restConfig *rest.Config) []Valida
 		return []ValidationError{{
 			Message: "no cluster issuers configured",
 			Type:    ValidationStatusWarning,
-		}}
+		}}, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 // checkContainerDRuntime checks that the nodes are running with the containerd runtime
-func checkContainerDRuntime(list *v1.NodeList, _ *rest.Config) []ValidationError {
-	var resultErr []ValidationError
-	for _, node := range list.Items {
+func checkContainerDRuntime(ctx context.Context, config *rest.Config, namespace string) ([]ValidationError, error) {
+	nodes, err := listNodesFromContext(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	var res []ValidationError
+	for _, node := range nodes {
 		runtime := node.Status.NodeInfo.ContainerRuntimeVersion
 		if !strings.Contains(runtime, "containerd") {
-			resultErr = append(resultErr, ValidationError{
+			res = append(res, ValidationError{
 				Message: "container runtime not containerd on node: " + node.Name + ", runtime: " + runtime,
 				Type:    ValidationStatusError,
 			})
 		}
 	}
 
-	return resultErr
+	return res, nil
+}
+
+type checkSecretOpts struct {
+	RequiredFields []string
+	Validator      func(*corev1.Secret) ([]ValidationError, error)
+}
+
+type CheckSecretOpt func(*checkSecretOpts)
+
+func CheckSecretRequiredData(entries ...string) CheckSecretOpt {
+	return func(cso *checkSecretOpts) {
+		cso.RequiredFields = append(cso.RequiredFields, entries...)
+	}
+}
+
+func CheckSecretRule(validator func(*corev1.Secret) ([]ValidationError, error)) CheckSecretOpt {
+	return func(cso *checkSecretOpts) {
+		cso.Validator = validator
+	}
+}
+
+// CheckSecret produces a new check for an in-cluster secret
+func CheckSecret(name string, opts ...CheckSecretOpt) ValidationCheck {
+	var cfg checkSecretOpts
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	return ValidationCheck{
+		Name:        name + " is present and valid",
+		Description: "ensures the " + name + " secret is present and contains the required data",
+		Check: func(ctx context.Context, config *rest.Config, namespace string) ([]ValidationError, error) {
+			client, err := clientsetFromContext(ctx, config)
+			if err != nil {
+				return nil, err
+			}
+
+			secret, err := client.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				return []ValidationError{
+					{
+						Message: "secret " + name + " not found",
+						Type:    ValidationStatusError,
+					},
+				}, nil
+			} else if err != nil {
+				return nil, err
+			}
+
+			var res []ValidationError
+			for _, k := range cfg.RequiredFields {
+				_, ok := secret.Data[k]
+				if !ok {
+					res = append(res, ValidationError{
+						Message: fmt.Sprintf("secret %s has no %s entry", name, k),
+						Type:    ValidationStatusError,
+					})
+				}
+			}
+
+			if cfg.Validator != nil {
+				vres, err := cfg.Validator(secret)
+				if err != nil {
+					return nil, err
+				}
+				res = append(res, vres...)
+			}
+
+			return res, nil
+		},
+	}
 }
 
 const (
@@ -99,25 +177,26 @@ const (
 )
 
 // checkKernelVersion checks the nodes are using the correct linux Kernel version
-func checkKernelVersion(list *v1.NodeList, _ *rest.Config) []ValidationError {
-
+func checkKernelVersion(ctx context.Context, config *rest.Config, namespace string) ([]ValidationError, error) {
 	constraint, err := semver.NewConstraint(kernelVersionConstraint)
 	if err != nil {
-		return []ValidationError{{
-			Message: err.Error(),
-			Type:    ValidationStatusError,
-		}}
+		return nil, err
 	}
 
-	var resultErr []ValidationError
-	for _, node := range list.Items {
+	nodes, err := listNodesFromContext(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	var res []ValidationError
+	for _, node := range nodes {
 		kernelVersion := node.Status.NodeInfo.KernelVersion
 		// Some GCP kernel versions contain a non-semver compatible suffix
 		kernelVersion = strings.TrimSuffix(kernelVersion, "+")
 		version, err := semver.NewVersion(kernelVersion)
 		if err != nil {
 			// This means that the given version doesn't conform to semver format - user must decide
-			resultErr = append(resultErr, ValidationError{
+			res = append(res, ValidationError{
 				Message: err.Error() + " kernel version: " + kernelVersion,
 				Type:    ValidationStatusWarning,
 			})
@@ -127,12 +206,12 @@ func checkKernelVersion(list *v1.NodeList, _ *rest.Config) []ValidationError {
 		valid := constraint.Check(version)
 
 		if !valid {
-			resultErr = append(resultErr, ValidationError{
+			res = append(res, ValidationError{
 				Message: "kernel version " + kernelVersion + " does not satisfy " + kernelVersionConstraint + " on node: " + node.Name,
 				Type:    ValidationStatusError,
 			})
 		}
 	}
 
-	return resultErr
+	return res, nil
 }

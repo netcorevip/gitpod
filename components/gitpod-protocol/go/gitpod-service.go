@@ -73,6 +73,7 @@ type APIInterface interface {
 	SendFeedback(ctx context.Context, feedback string) (res string, err error)
 	RegisterGithubApp(ctx context.Context, installationID string) (err error)
 	TakeSnapshot(ctx context.Context, options *TakeSnapshotOptions) (res string, err error)
+	WaitForSnapshot(ctx context.Context, options *WaitForSnapshotOptions) (err error)
 	GetSnapshots(ctx context.Context, workspaceID string) (res []*string, err error)
 	StoreLayout(ctx context.Context, workspaceID string, layoutData string) (err error)
 	GetLayout(ctx context.Context, workspaceID string) (res string, err error)
@@ -1277,6 +1278,21 @@ func (gp *APIoverJSONRPC) TakeSnapshot(ctx context.Context, options *TakeSnapsho
 	return
 }
 
+// WaitForSnapshot calls waitForSnapshot on the server
+func (gp *APIoverJSONRPC) WaitForSnapshot(ctx context.Context, options *WaitForSnapshotOptions) (err error) {
+	if gp == nil {
+		err = errNotConnected
+		return
+	}
+	var _params []interface{}
+
+	_params = append(_params, options)
+
+	var result string
+	err = gp.C.Call(ctx, "waitForSnapshot", _params, &result)
+	return
+}
+
 // GetSnapshots calls getSnapshots on the server
 func (gp *APIoverJSONRPC) GetSnapshots(ctx context.Context, workspaceID string) (res []*string, err error) {
 	if gp == nil {
@@ -1731,7 +1747,6 @@ type WorkspaceInstanceConditions struct {
 	FirstUserActivity string `json:"firstUserActivity,omitempty"`
 	NeededImageBuild  bool   `json:"neededImageBuild,omitempty"`
 	PullingImages     bool   `json:"pullingImages,omitempty"`
-	ServiceExists     bool   `json:"serviceExists,omitempty"`
 	Timeout           string `json:"timeout,omitempty"`
 }
 
@@ -1779,7 +1794,6 @@ type GetWorkspaceTimeoutResult struct {
 // WorkspaceInstancePort is the WorkspaceInstancePort message type
 type WorkspaceInstancePort struct {
 	Port       float64 `json:"port,omitempty"`
-	TargetPort float64 `json:"targetPort,omitempty"`
 	URL        string  `json:"url,omitempty"`
 	Visibility string  `json:"visibility,omitempty"`
 }
@@ -1925,6 +1939,11 @@ type GenerateNewGitpodTokenOptions struct {
 type TakeSnapshotOptions struct {
 	LayoutData  string `json:"layoutData,omitempty"`
 	WorkspaceID string `json:"workspaceId,omitempty"`
+}
+
+// WaitForSnapshotOptions is the WaitForSnapshotOptions message type
+type WaitForSnapshotOptions struct {
+	SnapshotID string `json:"snapshotID,omitempty"`
 }
 
 // PreparePluginUploadParams is the PreparePluginUploadParams message type
@@ -2149,12 +2168,6 @@ type UserFeatureSettings struct {
 	// Permanent feature flags are added to each and every workspace instance
 	// this user starts.
 	PermanentWSFeatureFlags []string `json:"permanentWSFeatureFlags,omitempty"`
-
-	// This field is used as marker to grant users a free trial for using private repositories,
-	// independent of any subscription or Chargebee.
-	//   - it is set when the user uses their first private repo
-	//   - whether the trial is expired or not is juged by the UserService
-	PrivateRepoTrialStartDate string `json:"privateRepoTrialStartDate,omitempty"`
 }
 
 // UserPlatform is the UserPlatform message type

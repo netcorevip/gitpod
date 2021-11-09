@@ -4,7 +4,7 @@
  * See License.enterprise.txt in the project root folder.
  */
 
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { WorkspaceFactory } from "../../../src/workspace/workspace-factory";
 import { injectable, inject } from "inversify";
 import { TraceContext } from "@gitpod/gitpod-protocol/lib/util/tracing";
@@ -16,7 +16,7 @@ import { ResponseError } from 'vscode-jsonrpc';
 import { ErrorCodes } from '@gitpod/gitpod-protocol/lib/messaging/error';
 import { generateWorkspaceID } from '@gitpod/gitpod-protocol/lib/util/generate-workspace-id';
 import { HostContextProvider } from '../../../src/auth/host-context-provider';
-import { parseRepoUrl } from '../../../src/repohost';
+import { RepoURL } from '../../../src/repohost';
 
 @injectable()
 export class WorkspaceFactoryEE extends WorkspaceFactory {
@@ -153,7 +153,7 @@ export class WorkspaceFactoryEE extends WorkspaceFactory {
     protected async storePrebuildInfo(ctx: TraceContext, project: Project, pws: PrebuiltWorkspace, ws: Workspace, user: User) {
         const span = TraceContext.startSpan("storePrebuildInfo", ctx);
         const { userId, teamId, name: projectName, id: projectId } = project;
-        const parsedUrl = parseRepoUrl(project.cloneUrl);
+        const parsedUrl = RepoURL.parseRepoUrl(project.cloneUrl);
         if (!parsedUrl) {
             return;
         }
